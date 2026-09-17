@@ -79,7 +79,7 @@ returns has been tested yet.
 
 ## Not started
 
-Readout, baseline arms, backtest harness, risk layer, news history ingestion,
+Baseline arms, backtest harness, risk layer, news history ingestion,
 visualisation. See `03-architecture.md` for the component list.
 
 ## Known issues
