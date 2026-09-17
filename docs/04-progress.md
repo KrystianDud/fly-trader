@@ -11,14 +11,15 @@ Last updated: 2026-09-17
 | Brain loading and simulation | ✅ working, benchmarked |
 | Market data | ✅ USD/JPY 1m, 1.38M bars |
 | News sense (Jev) | ✅ connected and sanity-checked |
-| Sensory encoding | 🟡 drafted, untested |
+| Sensory encoding | ✅ working, validated |
 | Readout and training | ⬜ not started |
 | Baseline arms | ⬜ not started |
 | Backtest and validation | ⬜ not started |
 | Risk layer | ⬜ not started |
 | 3D visualisation | ⬜ not started |
 
-Overall: roughly a third of the way to a first end-to-end result.
+Overall: roughly 40% of the way to a first end-to-end result. The go/no-go
+test passed — market state reaches the descending neurons in a structured way.
 
 ## Done
 
@@ -53,12 +54,28 @@ Overall: roughly a third of the way to a first end-to-end result.
 - Six decisions logged in `05-decisions.md`, including the choice of USD/JPY
   over Nasdaq and the exclusion of numeric input to Jev.
 
+### Go/no-go test passed (2026-09-17)
+
+256 windows sampled across 2023-2026, whole brain, 20 ms each:
+
+- Descending activity varies with market state: 209 spikes per window on
+  average, range 0-415, with 358 of 1,314 descending neurons participating.
+- Individual command neurons track individual signals, up to r = +0.97.
+  Notably DNa02, a known steering neuron, tracks 15-minute momentum at +0.93.
+- **Giant Fiber (DNp01) tracks the crash signal at r = +0.90**, rising
+  monotonically across quartiles (3.8 -> 11.4 spikes). The escape circuit
+  responds to sharp adverse moves.
+- Five principal components explain 83% of descending variance; the top three
+  map onto crash (+0.97), volatility (+0.95) and slow momentum (+0.85).
+
+Caveat recorded: these correlations are partly by construction, since the
+looming channel is driven by the crash signal. They show the signal propagates,
+not that the wiring is better than a scrambled one. No relationship to future
+returns has been tested yet.
+
 ## In progress
 
-- **Sensory encoding** (`senses.py`) — written, not yet run against real data.
-  Next step is checking that descending-neuron activity actually varies with
-  market state. If it does not, the whole approach needs rethinking, so this is
-  the first real go/no-go moment.
+- Readout and confidence gate.
 
 ## Not started
 
@@ -69,22 +86,23 @@ visualisation. See `03-architecture.md` for the component list.
 
 | Issue | Impact | Plan |
 |---|---|---|
-| Batching across market windows gave only ~1.4× | Full-history runs slower than hoped | Multiprocessing across 8 cores instead |
+| Batching across market windows gave only ~1.4x | Full-history runs slower than hoped | Multiprocessing across 8 cores instead |
+| 0.49 s per window with all channels driven, vs 0.125 s benchmark | 92k windows would take 12 h per arm | Multiprocessing, or train on a subsample first |
+| 956 of 1,314 descending neurons never fire | Most of the command channel unused | Expected with only three sense modalities driven; revisit if the readout is starved |
 | No GPU acceleration available | CPU-bound throughput | Accept; reduce decisions or graph density if binding |
 | Point-in-time headlines not yet sourced | News channel cannot be backtested | GDELT ingestion, or forward-only testing |
 | Dukascopy data unverified against a second source | Data-correctness SLO unmet | Spot-check before Gate 0 |
 
 ## Immediate next steps
 
-1. Run the sensory encoder over a few thousand USD/JPY windows and check that
-   descending-neuron activity varies with market state (go/no-go).
-2. Build the readout and confidence gate.
-3. Build the rewired and random arms.
-4. Build the walk-forward harness with costs and leakage assertions.
-5. First four-arm result on USD/JPY.
+1. Build the readout and confidence gate.
+2. Build the rewired and random arms.
+3. Build the walk-forward harness with costs and leakage assertions.
+4. First four-arm result on USD/JPY.
 
 ## Log
 
 | Date | Entry |
 |---|---|
+| 2026-09-17 | Go/no-go passed: market state reaches descending neurons, Giant Fiber tracks crashes at r=+0.90. |
 | 2026-09-17 | Project started. Brain loading, simulation, benchmarking, USD/JPY data, Jev connection, documentation. |
