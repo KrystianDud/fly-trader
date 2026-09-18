@@ -28,6 +28,8 @@ POLL_SECONDS = 45
 KEEP_PER_SLICE = 6          # how many survive triage per 15-minute GDELT slice
 RSS_SECONDS = 20            # RSS publishes continuously, so poll it hard
 RSS_MAX_PER_POLL = 8        # cap the LLM calls when a wire dumps a batch
+MIN_TRIAGE = 0.15           # below this the classifier is saying "irrelevant",
+                            # and taking the top N anyway just buys noise
 HISTORY = 400               # rows held in memory for late joiners
 
 app = FastAPI()
@@ -137,6 +139,11 @@ async def run_slice(when: datetime) -> bool:
         )
 
     chosen = df.head(KEEP_PER_SLICE)
+    chosen = chosen[chosen["triage"].fillna(1.0) >= MIN_TRIAGE]
+    if not len(chosen):
+        await broadcast({"type": "slice", "t": when.isoformat(),
+                         "stage": "nothing above the triage floor"})
+        return True
     state["counts"]["triaged"] += len(chosen)
     for _, r in chosen.iterrows():
         await broadcast(
@@ -218,6 +225,9 @@ async def handle_live(df) -> None:
         )
 
     chosen = df.head(RSS_MAX_PER_POLL)
+    chosen = chosen[chosen["triage"].fillna(1.0) >= MIN_TRIAGE]
+    if not len(chosen):
+        return
     state["counts"]["triaged"] += len(chosen)
     for _, r in chosen.iterrows():
         await broadcast(

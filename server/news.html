@@ -209,7 +209,7 @@
       "<span>conf " + d.conf.toFixed(2) + "</span>" +
       '<span>shock <i class="' + (d.shock > 0.6 ? "warn" : "") + '">' + d.shock.toFixed(2) + "</i></span>" +
       "<span>" + d.kind + "</span>" +
-      "<span>lexicon " + d.tone.toFixed(1) + "</span>" +
+      (d.channel === "gdelt" ? "<span>lexicon " + d.tone.toFixed(1) + "</span>" : "") +
       "</div>";
     feeds.sc.prepend(el);
     trim(feeds.sc);
