@@ -257,8 +257,73 @@ subtracts.
 
 That baseline cost four lines and should have been there from the first run.
 
+### The full sweep, and a longer look makes it worse
+
+All six arms, 92,030 decisions each, plus a 50 ms ablation on 30,000.
+
+| Arm | IC (20 ms) |
+|---|---|
+| features only | **+0.0095** |
+| random graph | +0.0083 |
+| rewire 0.1 | +0.0040 |
+| rewire 0.25 | +0.0040 |
+| rewire 1.0 | +0.0031 |
+| rewire 0.5 | -0.0012 |
+| **real** | **-0.0022** |
+
+Wiring advantage -0.0176 bp, CI [-0.054, +0.019], does not exclude zero. The
+dose-response curve is flat and the real connectome sits at the bottom.
+
+The 50 ms ablation was meant to fix reading the network mid-computation. It
+made things worse: real -0.0042 against its scramble's +0.0062, and this time
+the confidence interval *excludes zero* in the negative direction. Given longer
+to run, the real wiring underperforms its own scramble significantly.
+
+### Why: the fly brain is a funnel, and that is the whole point of it
+
+A hypothesis, then a measurement that refuted it, then a better answer.
+
+The hypothesis was that dense recurrence lets the real graph settle into its own
+dynamics and stop listening to the input. Measuring input-dependence directly
+says the opposite: the real connectome is the *most* input-driven arm of all
+(R² 0.43 against a scramble's 0.22) and amplifies hardest (199 spikes against
+42 from identical drive).
+
+The discriminator is dimensionality.
+
+| Arm | Effective dimensions |
+|---|---|
+| real, 20 ms | **6.8** |
+| rewire 0.1 | 7.0 |
+| rewire 0.25 | 7.4 |
+| rewire 0.5 | 8.1 |
+| rewire 1.0 | **16.7** |
+| real, 50 ms | 7.3 |
+| rewire 1.0, 50 ms | **20.7** |
+
+The real connectome compresses its activity into about seven effective
+dimensions. Scrambling it opens that up to seventeen or twenty-one. A
+threefold difference, consistent across both simulation lengths, and it tracks
+the rewiring dose monotonically.
+
+That is what a nervous system is *for*. The wiring is a funnel: it takes
+high-dimensional sensory input and collapses it into a handful of mutually
+exclusive commands — flee, turn, feed, freeze. Evolution optimised it to throw
+information away decisively in milliseconds, because an animal that deliberates
+gets eaten.
+
+Which is precisely wrong for this task. Extracting a faint statistical edge
+needs small distinctions preserved across many dimensions. The real connectome
+destroys them by design; the scramble preserves more of them by accident. Hence
+the scramble scoring higher, and hence the gap widening when the network is
+given longer to compress.
+
+Stated as a claim someone else could test: **a connectome-constrained network
+inherits the animal's information bottleneck, and that bottleneck is a
+liability on any task requiring the preservation of weak evidence rather than
+fast commitment.**
+
 ---
 
-*The 50 ms ablation and the retinal arm are still pending. Neither is expected
-to overturn this, but the 20 ms window does cut the network off while its
-activity is still rising, and the retina is a genuinely different pathway.*
+*Still pending: training over the graph rather than freezing it, and the retinal
+encoding.*
