@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from fly_trader import connectome, senses
+from fly_trader import connectome, retina, senses
 from fly_trader.lif import FlyBrain, LIFParams
 
 N = 300  # consecutive 15-minute decisions (~3 trading days)
@@ -39,6 +39,24 @@ gf_ids = c.ids_where(type="DNp01")
 
 brain = FlyBrain(c.W, LIFParams(dt=0.2))
 counts = brain.run(SIM_MS, smap.all_idx, smap.drive(window), record=dn).numpy().T
+
+# what the eye sees, and what the eye alone makes the brain do
+eye = retina.Retina(c, frames=8, bars=64)
+pos_in_bars = bars.index.get_indexer(window.index)
+closes_all = bars["close"].to_numpy()
+retina_frames, retina_counts = [], []
+for i in range(0, len(window), 16):
+    chunk = pos_in_bars[i : i + 16]
+    drive = eye.batch_drive(bars, chunk)
+    out = brain.run_movie(50.0, eye.all_idx, drive, dn, bins=1).numpy()[0].T
+    retina_counts.append(out)
+    for e in chunk:  # last movie frame: what the fly sees at decision time
+        retina_frames.append((eye.render(closes_all[: e + 1])[-1] > 0).astype(np.uint8))
+    print(f"  retina {min(i + 16, len(window))}/{len(window)}", flush=True)
+retina_counts = np.concatenate(retina_counts)
+retina_frames = np.array(retina_frames)
+print(f"retina view {retina_frames.shape}, mean spikes/window "
+      f"{retina_counts.sum(1).mean():.0f}")
 
 # keep only neurons that ever fire, for a compact brain display
 live = counts.sum(axis=0) > 0
@@ -83,6 +101,9 @@ for i, (ts, row) in enumerate(window.iterrows()):
                     for k in ("fast_up", "fast_down", "slow_up", "slow_down",
                               "volatility", "looming")},
         "brain": counts_live[i].tolist(),
+        # rows of the retinal image, packed as strings of 0/1 to keep the file small
+        "eye": ["".join(map(str, r)) for r in retina_frames[i]],
+        "eye_spikes": int(retina_counts[i].sum()),
     })
 
 # 1-minute price context for the monitor
@@ -104,6 +125,8 @@ out = {
         "provisional": True,
     },
     "dn_types": live_types,
+    "retina": {"w": int(retina_frames.shape[2]), "h": int(retina_frames.shape[1]),
+               "on": len(eye.on_idx), "off": len(eye.off_idx), "sim_ms": 50},
     "gf_index": gf_col,
     "frames": frames,
     "minute": [{"t": t.isoformat(), "c": round(float(v), 3)} for t, v in minute.items()],

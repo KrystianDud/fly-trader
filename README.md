@@ -25,6 +25,7 @@ negative answer just as publishable as a positive one.
 | [docs/04-progress.md](docs/04-progress.md) | Current status and milestone log |
 | [docs/05-decisions.md](docs/05-decisions.md) | Decision log with rationale |
 | [docs/06-gpu-runbook.md](docs/06-gpu-runbook.md) | Running the sweep on a GPU box |
+| [docs/07-journal.md](docs/07-journal.md) | What we found, including what was wrong |
 
 ## Quick start
 

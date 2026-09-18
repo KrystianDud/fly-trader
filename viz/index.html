@@ -301,7 +301,7 @@
 <div id="brainwrap">
   <div class="brain-head">
     <span>Descending neurons <b id="dn-count">—</b></span>
-    <span>Giant fiber <em id="gf">0</em></span>
+    <span>Eye <b id="eye-sp">0</b> · Giant fiber <em id="gf">0</em></span>
   </div>
   <canvas id="brain"></canvas>
 </div>
@@ -533,6 +533,67 @@
   const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.22), mat(0x241E2C, 0.6));
   foot.position.set(-0.1, 0.845, -1.0);
   scene.add(foot);
+
+  /* ---- the fly's-eye screen: what the retina is actually shown ---- */
+  const eyeCanvas = document.createElement("canvas");
+  eyeCanvas.width = 360; eyeCanvas.height = 400;
+  const eyeTex = new THREE.CanvasTexture(eyeCanvas);
+  const eyeScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.62, 0.68),
+    new THREE.MeshBasicMaterial({ map: eyeTex })
+  );
+  eyeScreen.position.set(1.18, 1.22, -0.92);
+  eyeScreen.rotation.y = -0.42;
+  scene.add(eyeScreen);
+  const eyeBezel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.76, 0.06),
+    mat(0x2A2334, 0.65)
+  );
+  eyeBezel.position.set(1.2, 1.22, -0.95);
+  eyeBezel.rotation.y = -0.42;
+  scene.add(eyeBezel);
+  const eyeStand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.06), mat(0x2A2334, 0.65));
+  eyeStand.position.set(1.2, 0.99, -0.93);
+  scene.add(eyeStand);
+  const eyeGlow = new THREE.PointLight(0x9BE8A8, 0.4, 2.4, 2);
+  eyeGlow.position.set(1.1, 1.22, -0.7);
+  scene.add(eyeGlow);
+
+  function drawEye(frame) {
+    const g = eyeCanvas.getContext("2d");
+    g.fillStyle = "#0E1610";
+    g.fillRect(0, 0, 360, 400);
+    if (!frame || !frame.eye) return;
+
+    const rows = frame.eye, h = rows.length, w = rows[0].length;
+    const cell = Math.min(340 / w, 330 / h);
+    const ox = (360 - cell * w) / 2, oy = 44;
+
+    g.fillStyle = "#9BE8A8";
+    g.font = "600 15px 'JetBrains Mono', monospace";
+    g.textAlign = "left";
+    g.fillText("FLY EYE · L1/L2", 14, 24);
+    g.textAlign = "right";
+    g.fillStyle = "#6FD3C2";
+    g.fillText(frame.eye_spikes + " sp", 346, 24);
+
+    // one dot per ommatidial column, lit where the chart falls on it
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const on = rows[y][x] === "1";
+        g.fillStyle = on ? "#9BE8A8" : "rgba(155,232,168,0.07)";
+        g.beginPath();
+        g.arc(ox + cell * (x + 0.5) + (y % 2 ? cell * 0.25 : 0),
+              oy + cell * (h - y - 0.5), cell * (on ? 0.42 : 0.2), 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = "rgba(155,232,168,0.5)";
+    g.font = "11px 'JetBrains Mono', monospace";
+    g.textAlign = "center";
+    g.fillText(w + "x" + h + " columns · 64 bars of price", 180, 390);
+    eyeTex.needsUpdate = true;
+  }
 
   /* ---- keyboard, mug, books, headphones, plant ---- */
   const kb = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.03, 0.24), mat(0x312A3A, 0.7));
@@ -881,12 +942,14 @@
     if (!f) return;
     document.getElementById("stamp-time").textContent = fmtDate(f.t);
     document.getElementById("gf").textContent = f.gf;
+    document.getElementById("eye-sp").textContent = f.eye_spikes ?? 0;
     document.getElementById("dn-count").textContent =
       f.brain.filter(function (v) { return v > 0; }).length + " / " + f.brain.length + " firing";
     document.getElementById("clock").textContent = (i + 1) + " / " + frames.length;
     drawLabel(f.action, f.c, f.conf);
     drawChart(i);
     drawBrain(f);
+    drawEye(f);
     // ease the target itself, so a flipped decision bends the path instead of
     // yanking it
     const want = Math.max(-1, Math.min(1, f.score * 1.7));
