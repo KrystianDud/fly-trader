@@ -83,6 +83,17 @@
   .bar { height: 3px; background: rgba(255,190,122,0.12); border-radius: 2px; margin-top: 7px; overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--lamp); }
   .empty { padding: 18px 16px; font-size: 12px; color: var(--faint); }
+  .slice-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; justify-content: space-between;
+    padding: 6px 16px;
+    background: linear-gradient(to bottom, var(--night) 70%, rgba(23,19,32,0.85));
+    border-bottom: 1px solid var(--edge);
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--lamp);
+  }
+  .slice-head span:last-child { color: var(--faint); }
+  #status b { color: var(--cream); font-weight: 500; }
   @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -131,6 +142,25 @@
   }
   function fmt(iso) { return new Date(iso).toISOString().slice(11, 16) + "Z"; }
 
+  function ago(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s";
+    const m = Math.floor(s / 60);
+    return m < 60 ? m + "m " + (s % 60) + "s" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+  }
+
+  // a slice header, so a batch arriving is visible as a batch
+  function divider(el, iso, label) {
+    const prev = el.firstChild;
+    if (prev && prev.classList && prev.classList.contains("slice-head") &&
+        prev.dataset.t === iso) return;
+    const d = document.createElement("div");
+    d.className = "slice-head";
+    d.dataset.t = iso;
+    d.innerHTML = "<span>" + fmt(iso) + "</span><span>" + label + "</span>";
+    el.prepend(d);
+  }
+
   function addArticle(d) {
     const hot = d.triage != null && d.triage >= 0.5;
     const el = document.createElement("article");
@@ -175,6 +205,20 @@
     clearEmpty(feeds.sc);
   }
 
+  const clock = { last: null, seen: null };
+
+  function tick() {
+    const status = document.getElementById("status");
+    if (!clock.last) return;
+    const next = new Date(clock.last.getTime() + 15 * 60000);
+    const until = next.getTime() + 4 * 60000 - Date.now();  // GDELT posts a few minutes late
+    status.innerHTML =
+      "live · last slice <b>" + fmt(clock.last.toISOString()) + "</b> (" +
+      ago(Date.now() - clock.seen) + " ago) · next " +
+      (until > 0 ? "in " + ago(until) : "any moment");
+  }
+  setInterval(tick, 1000);
+
   function connect() {
     const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
     const dot = document.getElementById("dot");
@@ -199,8 +243,16 @@
         document.getElementById("c-tri").textContent = d.triaged;
         document.getElementById("c-sc").textContent = d.scored;
       } else if (d.type === "slice") {
-        status.textContent = d.stage === "fetching" ? "fetching " + fmt(d.t)
-          : d.stage === "idle" ? "live · last slice " + fmt(d.t) : d.stage;
+        if (d.stage === "fetching") {
+          divider(feeds.in, d.t, "slice");
+          divider(feeds.tri, d.t, "forwarded");
+          divider(feeds.sc, d.t, "scored");
+        }
+        status.textContent = d.stage === "fetching" ? "fetching " + fmt(d.t) : d.stage;
+      } else if (d.type === "waiting") {
+        clock.last = new Date(d.next_after);
+        clock.seen = Date.now();
+        tick();
       } else if (d.type === "error") {
         status.textContent = "error: " + d.message;
       }

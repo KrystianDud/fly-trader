@@ -26,6 +26,7 @@ import pandas as pd
 import requests
 
 GKG_URL = "https://data.gdeltproject.org/gdeltv2/{stamp}.gkg.csv.zip"
+LAST_UPDATE = "https://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 CACHE = Path("data/news")
 
 # GKG v2.1 columns we use (0-indexed)
@@ -123,6 +124,26 @@ def fetch_slice(when: datetime, timeout: int = 60) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def newest_slice(timeout: int = 20) -> datetime | None:
+    """Ask GDELT what it has just published, rather than guessing the lag.
+
+    lastupdate.txt names the current files, so the timestamp comes from the
+    source instead of from an assumption about how far behind it runs.
+    """
+    try:
+        r = requests.get(LAST_UPDATE, timeout=timeout)
+        r.raise_for_status()
+        for line in r.text.splitlines():
+            if ".gkg.csv.zip" in line:
+                stamp = line.rsplit("/", 1)[-1].split(".")[0]
+                return datetime.strptime(stamp, "%Y%m%d%H%M%S").replace(
+                    tzinfo=timezone.utc
+                )
+    except Exception:
+        return None
+    return None
 
 
 def slices_between(start: datetime, end: datetime) -> list[datetime]:

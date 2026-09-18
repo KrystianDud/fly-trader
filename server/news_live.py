@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse
 
 from fly_trader import news, triage
 
-POLL_SECONDS = 60
+POLL_SECONDS = 45
 KEEP_PER_SLICE = 6          # how many survive triage per 15-minute slice
 HISTORY = 400               # rows held in memory for late joiners
 
@@ -54,34 +54,48 @@ async def broadcast(event: dict) -> None:
         clients.discard(ws)
 
 
-def latest_slice_time() -> datetime:
-    """GDELT publishes every 15 minutes with a few minutes of lag."""
-    now = datetime.now(timezone.utc) - timedelta(minutes=5)
-    return now.replace(minute=now.minute // 15 * 15, second=0, microsecond=0)
+BACKFILL_SLICES = 4  # an hour of history on startup, so the page is not blank
 
 
 async def pipeline_loop() -> None:
     state["model"] = load_model()
     await asyncio.sleep(1)
+    done: set[datetime] = set()
+    first = True
 
     while True:
         try:
-            slice_t = latest_slice_time()
-            if slice_t != state["last_slice"]:
-                await run_slice(slice_t)
-                state["last_slice"] = slice_t
+            newest = await asyncio.to_thread(news.newest_slice)
+            if newest is None:
+                await broadcast({"type": "slice", "t": datetime.now(timezone.utc).isoformat(),
+                                 "stage": "GDELT unreachable, retrying"})
+            else:
+                # on the first pass, fill the page with the last hour
+                wanted = (
+                    [newest - timedelta(minutes=15 * i) for i in range(BACKFILL_SLICES - 1, -1, -1)]
+                    if first else [newest]
+                )
+                first = False
+                for when in wanted:
+                    if when in done:
+                        continue
+                    got = await run_slice(when)
+                    if got:  # an empty slice is retried later, not marked done
+                        done.add(when)
+                        state["last_slice"] = when
+                await broadcast({"type": "waiting", "next_after": newest.isoformat()})
         except Exception as e:  # never let one bad slice kill the loop
             await broadcast({"type": "error", "message": str(e)[:200]})
         await asyncio.sleep(POLL_SECONDS)
 
 
-async def run_slice(when: datetime) -> None:
+async def run_slice(when: datetime) -> bool:
     await broadcast({"type": "slice", "t": when.isoformat(), "stage": "fetching"})
 
     df = await asyncio.to_thread(news.fetch_slice, when)
     if not len(df):
-        await broadcast({"type": "slice", "t": when.isoformat(), "stage": "empty"})
-        return
+        await broadcast({"type": "slice", "t": when.isoformat(), "stage": "not published yet"})
+        return False
 
     df = df[df.headline.map(news.is_readable)]
     df = df[df.apply(news.JPY.matches, axis=1)] if len(df) else df
@@ -90,7 +104,7 @@ async def run_slice(when: datetime) -> None:
         df = df.drop_duplicates(subset="_k").drop(columns="_k")
     if not len(df):
         await broadcast({"type": "slice", "t": when.isoformat(), "stage": "nothing relevant"})
-        return
+        return True
 
     model = state["model"]
     if model is not None:
@@ -146,7 +160,7 @@ async def run_slice(when: datetime) -> None:
             }
         )
     await broadcast({"type": "counts", **state["counts"]})
-    await broadcast({"type": "slice", "t": when.isoformat(), "stage": "idle"})
+    return True
 
 
 @app.on_event("startup")
