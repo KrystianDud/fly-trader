@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from fly_trader import arms, connectome, senses
+from fly_trader import arms, connectome, retina, senses
 from fly_trader.lif import FlyBrain, LIFParams
 
 OUT = Path("data/activations")
@@ -37,14 +37,24 @@ def main() -> None:
     ap.add_argument("--market", default="data/market/usdjpy_1m.parquet")
     ap.add_argument("--device", default="cpu", help="cpu | cuda")
     ap.add_argument("--threads", type=int, default=8)
+    ap.add_argument("--encoding", default="scalar", choices=["scalar", "retina"],
+                    help="scalar: momentum/volatility channels. "
+                         "retina: the chart drawn on the eye as a moving image")
+    ap.add_argument("--retina-bars", type=int, default=64)
+    ap.add_argument("--retina-frames", type=int, default=8)
     args = ap.parse_args()
 
     torch.set_num_threads(args.threads)
     OUT.mkdir(parents=True, exist_ok=True)
-    tag = f"{Path(args.market).stem}_{args.arm}_s{args.seed}_{args.sim_ms:g}ms"
+    enc = "" if args.encoding == "scalar" else f"_{args.encoding}"
+    tag = f"{Path(args.market).stem}_{args.arm}{enc}_s{args.seed}_{args.sim_ms:g}ms"
 
     c = connectome.load(min_weight=5)
     smap = senses.SensoryMap(c)
+    eye = (
+        retina.Retina(c, frames=args.retina_frames, bars=args.retina_bars)
+        if args.encoding == "retina" else None
+    )
     W = arms.build(c.W, args.arm, seed=args.seed)
     stats = arms.graph_stats(W)
 
@@ -62,12 +72,19 @@ def main() -> None:
 
     print(f"arm={args.arm}  windows={n:,}  neurons={c.n:,}  "
           f"edges={stats['edges']:,}  device={args.device}  batch={args.batch}")
+    if eye is not None:
+        print(f"  retina: {eye.summary()}")
     t0 = time.time()
+    pos = bars.index.get_indexer(feat.index)  # where each decision sits in the bars
     for start in range(0, n, args.batch):
         chunk = feat.iloc[start : start + args.batch]
-        out = brain.run_binned(
-            args.sim_ms, smap.all_idx, smap.drive(chunk), dn, bins=args.bins
-        )
+        if eye is not None:
+            drive = eye.batch_drive(bars, pos[start : start + len(chunk)])
+            out = brain.run_movie(args.sim_ms, eye.all_idx, drive, dn, bins=args.bins)
+        else:
+            out = brain.run_binned(
+                args.sim_ms, smap.all_idx, smap.drive(chunk), dn, bins=args.bins
+            )
         # (bins, neurons, batch) -> (batch, bins, neurons), clipped to uint8
         acts[start : start + len(chunk)] = (
             out.permute(2, 0, 1).clamp(0, 255).to(torch.uint8).cpu().numpy()
@@ -90,6 +107,7 @@ def main() -> None:
         "dt": args.dt,
         "step_minutes": args.step,
         "market": args.market,
+        "encoding": args.encoding,
         "from": str(feat.index[0]),
         "to": str(feat.index[-1]),
         "dn_ids": [int(b) for b in dn_ids],

@@ -148,6 +148,41 @@ class FlyBrain:
             counts += (spikes if record is None else spikes[record]).to(self.dtype)
         return counts
 
+    def run_movie(
+        self,
+        ms: float,
+        drive_idx: torch.Tensor,
+        frames_mV: torch.Tensor,
+        record: torch.Tensor,
+        bins: int = 4,
+    ) -> torch.Tensor:
+        """Run with a time-varying input: `frames_mV` is (frames, n_driven, batch).
+
+        Each frame is held for an equal slice of the simulation, so the image
+        moves across the retina while the brain is running. Direction-selective
+        neurons need motion; a held still image gives them nothing.
+        """
+        n_frames, _, batch = frames_mV.shape
+        self.reset(batch)
+
+        drive_idx = drive_idx.to(self.device)
+        record = record.to(self.device)
+        frames = frames_mV.to(self.device, self.dtype) * self.p.dt
+
+        steps = int(round(ms / self.p.dt))
+        per_frame = max(1, steps // n_frames)
+        per_bin = max(1, steps // bins)
+        out = torch.zeros(bins, len(record), batch, device=self.device, dtype=self.dtype)
+        drive = torch.zeros(self.n, batch, device=self.device, dtype=self.dtype)
+
+        for s in range(steps):
+            f = min(n_frames - 1, s // per_frame)
+            drive.zero_()
+            drive[drive_idx] = frames[f]
+            spikes = self.step(drive)
+            out[min(bins - 1, s // per_bin)] += spikes[record].to(self.dtype)
+        return out
+
     def run_binned(
         self,
         ms: float,
