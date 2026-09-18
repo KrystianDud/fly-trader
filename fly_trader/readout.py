@@ -24,15 +24,32 @@ class Result:
     tested: np.ndarray     # boolean mask of samples with an out-of-sample value
 
 
-def design_matrix(acts: np.ndarray, bins: str = "all") -> np.ndarray:
+def design_matrix(acts: np.ndarray, bins: str = "all", mode: str = "raw") -> np.ndarray:
     """(windows, bins, neurons) -> (windows, features).
 
-    bins='all' keeps the time course; 'sum' collapses it, which is the ablation
-    that tells us whether spike timing carried anything.
+    bins='all' keeps the time course; 'sum' collapses it.
+
+    mode separates two things the connectome literature says are governed by
+    different structure (arXiv 2606.17745): gross response follows degree and
+    weight, which our rewiring preserves exactly, while *routing* — which
+    neurons carry the signal, relative to each other — follows exact wiring.
+
+      raw        spike counts as they come, dominated by gross magnitude
+      magnitude  total spikes per bin only: the part rewiring cannot change
+      routing    each window normalised to its own total, so only the pattern
+                 across neurons survives
     """
     a = acts.astype(np.float32)
     if bins == "sum":
         a = a.sum(axis=1, keepdims=True)
+
+    if mode == "magnitude":
+        return a.sum(axis=2)  # (windows, bins)
+
+    if mode == "routing":
+        total = a.sum(axis=2, keepdims=True)
+        total[total == 0] = 1.0
+        a = a / total  # composition: who fired, not how much
     return a.reshape(len(a), -1)
 
 

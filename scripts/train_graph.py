@@ -92,10 +92,16 @@ def main() -> None:
     cfg = graphmodel.Config(channels=args.channels, steps=args.steps)
     print(f"{n:,} decisions, {len(folds)} folds, device {args.device}\n")
 
+    REPORTS.mkdir(exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    partial = REPORTS / f"trained_{stamp}.json"
+
     rows = []
-    for arm in args.arms:
+    for arm_i, arm in enumerate(args.arms):
         t0 = time.time()
         preds = np.full(n, np.nan)
+        print(f"[{datetime.now(timezone.utc):%H:%M}Z] arm {arm_i + 1}/{len(args.arms)}: "
+              f"{arm}", flush=True)
 
         for k, f in enumerate(folds):
             if arm == "mlp":
@@ -113,10 +119,16 @@ def main() -> None:
             if k == 0:
                 print(f"  {arm}: {model.n_params():,} trainable parameters", flush=True)
 
+            tf = time.time()
             preds[f.test] = train_fold(
                 model, X[f.train], y[f.train], X[f.test],
                 args.epochs, args.batch, args.lr, args.device, log=(k == 0),
             )
+            took = time.time() - tf
+            left = (len(folds) - k - 1) * took + (len(args.arms) - arm_i - 1) * len(folds) * took
+            print(f"[{datetime.now(timezone.utc):%H:%M}Z]   fold {k + 1}/{len(folds)} "
+                  f"done in {took / 60:.1f} min, about {left / 60:.0f} min left overall",
+                  flush=True)
             del model
             if args.device == "cuda":
                 torch.cuda.empty_cache()
@@ -135,21 +147,19 @@ def main() -> None:
         rows.append({"arm": arm, "ic": ic, "hit_rate": hit, "sharpe": sharpe,
                      "net_mean_bp": float(net.mean() * 1e4),
                      "minutes": round((time.time() - t0) / 60, 1)})
+        # written after every arm: stopping early keeps the arms already done
+        partial.write_text(json.dumps({"config": vars(args), "arms": rows,
+                                       "complete": len(rows) == len(args.arms)},
+                                      indent=2, default=float))
         print(f"  {arm:12s} IC {ic:+.4f}  hit {hit:.3f}  net {net.mean() * 1e4:+.3f} bp  "
               f"Sharpe {sharpe:+.2f}  ({(time.time() - t0) / 60:.1f} min)\n", flush=True)
-
-    REPORTS.mkdir(exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    (REPORTS / f"trained_{stamp}.json").write_text(
-        json.dumps({"config": vars(args), "arms": rows}, indent=2, default=float)
-    )
 
     real = next((r for r in rows if r["arm"] == "real"), None)
     rew = next((r for r in rows if r["arm"] == "rewire1.0"), None)
     if real and rew:
         print(f"topology advantage: IC {real['ic'] - rew['ic']:+.4f} "
               f"(real {real['ic']:+.4f} vs rewired {rew['ic']:+.4f})")
-    print(f"report: reports/trained_{stamp}.json")
+    print(f"report: {partial}")
 
 
 if __name__ == "__main__":

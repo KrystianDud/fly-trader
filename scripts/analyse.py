@@ -83,12 +83,16 @@ def main() -> None:
     ap.add_argument("--bins", default="all", choices=["all", "sum"])
     ap.add_argument("--folds", type=int, default=6)
     ap.add_argument("--horizon", type=int, default=1)
+    ap.add_argument("--encoding", default="scalar", choices=["scalar", "retina"],
+                    help="retina runs share the 50ms suffix, so select explicitly")
     args = ap.parse_args()
 
     tags = sorted(
         p.name[: -len("_meta.json")] for p in ACTS.glob(f"{args.market}_*_meta.json")
     )
     tags = [t for t in tags if t.endswith(f"s{args.seed}_{args.sim_ms}ms")]
+    want_retina = args.encoding == "retina"
+    tags = [t for t in tags if ("_retina_" in t) == want_retina]
     if not tags:
         raise SystemExit(f"no cached activations for {args.market}")
 

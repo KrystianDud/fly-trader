@@ -323,7 +323,108 @@ inherits the animal's information bottleneck, and that bottleneck is a
 liability on any task requiring the preservation of weak evidence rather than
 fast commitment.**
 
+### The retina fails the same way
+
+Drawing the chart on the fly's own eye and playing it as a moving image — real
+stimulus, real entry point at the lamina, the whole optic lobe in play — gives
+rewire 1.0 an IC of +0.0123 and the real connectome -0.0003. Wiring advantage
+-0.0000, CI [-0.065, +0.065].
+
+The spike counts invert against the scalar encoding, which is informative. Given
+an image, the real optic lobe fires 94 spikes through 185 descending neurons;
+the scramble fires 771 through 707. The real thing is being selective. That is
+correct behaviour for an animal and wrong for extracting weak statistics.
+
+### Routing versus magnitude: the best remaining excuse, tested and rejected
+
+arXiv 2606.17745 reports that in the larval connectome, gross response follows
+degree and weight while *exact wiring* governs input routing. Our rewiring
+preserves degree and weight exactly, so a readout built on gross response is
+measuring the one quantity where wiring provably cannot matter. That would have
+explained every null.
+
+Two tests settle it.
+
+A classifier separates real from rewired activity at **99.2%** from routing
+features, against 86.3% from magnitude alone. Exact wiring leaves an enormous,
+easily detected signature, and our pipeline sees it clearly. The apparatus is
+not blind to wiring.
+
+But routing *predicts returns worse*, not better: real -0.0132 against its own
+magnitude readout at +0.0091. And the real-minus-rewired gap grows more negative
+toward routing, -0.0027 -> -0.0053 -> -0.0084.
+
+Also worth recording: **three features beat 655.** Total spike count per time
+bin matches the six raw market features, while the full high-dimensional
+readouts overfit into negative territory. The connectome's contribution is a
+compressed, noisier restatement of its own input.
+
+### Trained over the graph: the first positive signal, and it is not significant
+
+Training per-neuron parameters over the topology rather than freezing them —
+the setup where FlyGM and flyvis report connectome advantages:
+
+| Arm | IC | Hit | Sharpe |
+|---|---|---|---|
+| real | **+0.0070** | 0.513 | -1.86 |
+| rewire 1.0 | -0.0080 | 0.513 | -1.79 |
+| matched MLP | -0.0110 | 0.486 | -5.64 |
+
+Topology advantage +0.0150, the first time all day the real connectome comes
+out ahead. And it does not survive arithmetic: about 9,000 tested points gives a
+standard error on the difference of roughly 0.0149, so +0.0150 is **one standard
+error, p about 0.32**. Suggestive, not significant, one seed. The hit rates
+being identical at 0.513 while the ICs differ is a further reason for suspicion.
+
+Power analysis on the planned follow-up was more useful than the follow-up would
+have been: 30,000 windows at one seed moves this to 1.6 standard errors, still
+not significant. Five seeds at 12,000 windows costs a third of the compute and
+actually yields a confidence interval. More seeds beat more data when the
+uncertainty lives in initialisation.
+
+### The positive control, and what it costs us
+
+The control that should have existed before any market run: can this pipeline
+reproduce the fly's own escape reflex? Looming versus receding discs, the
+LC4/LPLC2 to Giant Fiber circuit, one of the best characterised in neuroscience.
+
+First attempt was useless — clean discs on an empty field, every arm at 0.99, a
+ceiling. Second attempt added noise, clutter, occlusion, variable contrast and
+drift. Third attempt capped every arm at the same number of live features, since
+the real connectome keeps 187 neurons alive where the scramble keeps 871, and a
+linear classifier gains from channel count alone.
+
+With difficulty raised and features matched:
+
+| Arm | Looming vs receding | Giant Fiber looming preference |
+|---|---|---|
+| real | **0.920** | **1.11** |
+| rewire 1.0 | **0.975** | 1.07 |
+| random | 0.788 | 1.00 |
+
+**A scrambled connectome detects looming better than the real one.** The Giant
+Fiber preference orders correctly — 1.11 > 1.07 > 1.00, biology showing through
+— but at a tenth of the strength the animal shows, and it is swamped by
+everything else.
+
+This is the most consequential result of the day, and it cuts against the
+conclusions above rather than supporting them. Our simulation does not express
+the biology. Candidate reasons, all specific and fixable:
+
+- **Uniform neuron parameters.** Every one of 165,836 neurons got identical
+  time constants, thresholds and reset behaviour. Real selectivity depends on
+  cell-type-specific properties we simply did not model.
+- **No electrical synapses.** The Giant Fiber escape system depends heavily on
+  gap junctions, and the connectome data we used contains chemical synapses
+  only. We removed a load-bearing wall and then measured the building.
+- **No neuromodulation, no adaptation, no plasticity.**
+
+What this means for everything above: today's market nulls are **not** strong
+evidence about connectomes. They are evidence about *our implementation* of one.
+The honest scope is narrower than the version recorded earlier this evening.
+
 ---
 
-*Still pending: training over the graph rather than freezing it, and the retinal
-encoding.*
+*Next: the simulation needs cell-type parameters and gap junctions before its
+silence means anything. The market work moves to crypto, where the
+signal-to-cost arithmetic is an order of magnitude friendlier.*
