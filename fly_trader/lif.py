@@ -164,6 +164,10 @@ class FlyBrain:
         batch = drive_mV.shape[1] if drive_mV.dim() == 2 else 1
         self.reset(batch)
 
+        # index tensors must live on the same device as what they index
+        drive_idx = drive_idx.to(self.device)
+        record = record.to(self.device)
+
         drive = torch.zeros(self.n, batch, device=self.device, dtype=self.dtype)
         d = drive_mV.to(self.device, self.dtype)
         drive[drive_idx] = d if d.dim() == 2 else d.unsqueeze(1).expand(-1, batch)

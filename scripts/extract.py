@@ -35,9 +35,11 @@ def main() -> None:
     ap.add_argument("--step", type=int, default=15, help="minutes between decisions")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--market", default="data/market/usdjpy_1m.parquet")
+    ap.add_argument("--device", default="cpu", help="cpu | cuda")
+    ap.add_argument("--threads", type=int, default=8)
     args = ap.parse_args()
 
-    torch.set_num_threads(8)
+    torch.set_num_threads(args.threads)
     OUT.mkdir(parents=True, exist_ok=True)
     tag = f"{Path(args.market).stem}_{args.arm}_s{args.seed}_{args.sim_ms:g}ms"
 
@@ -54,11 +56,12 @@ def main() -> None:
     dn_ids = c.ids_where(superclass="descending_neuron")
     dn = torch.tensor(c.idx(dn_ids))
 
-    brain = FlyBrain(W, LIFParams(dt=args.dt))
+    brain = FlyBrain(W, LIFParams(dt=args.dt), device=args.device)
     n = len(feat)
     acts = np.zeros((n, args.bins, len(dn)), dtype=np.uint8)
 
-    print(f"arm={args.arm}  windows={n:,}  neurons={c.n:,}  edges={stats['edges']:,}")
+    print(f"arm={args.arm}  windows={n:,}  neurons={c.n:,}  "
+          f"edges={stats['edges']:,}  device={args.device}  batch={args.batch}")
     t0 = time.time()
     for start in range(0, n, args.batch):
         chunk = feat.iloc[start : start + args.batch]
@@ -67,7 +70,7 @@ def main() -> None:
         )
         # (bins, neurons, batch) -> (batch, bins, neurons), clipped to uint8
         acts[start : start + len(chunk)] = (
-            out.permute(2, 0, 1).clamp(0, 255).to(torch.uint8).numpy()
+            out.permute(2, 0, 1).clamp(0, 255).to(torch.uint8).cpu().numpy()
         )
         done = start + len(chunk)
         if start % (args.batch * 20) == 0 or done >= n:

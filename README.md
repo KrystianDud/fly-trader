@@ -24,6 +24,7 @@ negative answer just as publishable as a positive one.
 | [docs/03-architecture.md](docs/03-architecture.md) | Components and data flow |
 | [docs/04-progress.md](docs/04-progress.md) | Current status and milestone log |
 | [docs/05-decisions.md](docs/05-decisions.md) | Decision log with rationale |
+| [docs/06-gpu-runbook.md](docs/06-gpu-runbook.md) | Running the sweep on a GPU box |
 
 ## Quick start
 
