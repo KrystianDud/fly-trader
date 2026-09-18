@@ -142,6 +142,10 @@
   }
   .panel h2 span { color: var(--cream-faint); letter-spacing: 0.08em; }
   .panel-body { overflow-y: auto; }
+  #trades {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+  }
   .panel-body::-webkit-scrollbar { width: 5px; }
   .panel-body::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 3px; }
 
@@ -655,8 +659,8 @@
   lampBase.position.set(-1.35, 0.845, -0.9);
   scene.add(lampBase);
   const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.52, 10), mat(0x3A3145, 0.6, 0.3));
-  lampArm.position.set(-1.35, 1.1, -0.9);
-  lampArm.rotation.z = -0.22;
+  lampArm.position.set(-1.28, 1.08, -0.89);
+  lampArm.rotation.z = -0.28;
   scene.add(lampArm);
   const shade = new THREE.Mesh(
     new THREE.ConeGeometry(0.17, 0.2, 18, 1, true),
@@ -665,8 +669,8 @@
       emissive: 0xFFBE7A, emissiveIntensity: 0.45,
     })
   );
-  shade.position.set(-1.28, 1.36, -0.88);
-  shade.rotation.z = Math.PI + 0.22;
+  shade.position.set(-1.16, 1.30, -0.88);
+  shade.rotation.set(0, 0, Math.PI - 0.5);
   scene.add(shade);
 
   /* ---- string lights along the back wall ---- */
@@ -693,7 +697,7 @@
   /* ---- lighting ---- */
   scene.add(new THREE.AmbientLight(0x4A3C58, 0.7));
   const lampLight = new THREE.PointLight(0xFFBE7A, 1.5, 7, 2);
-  lampLight.position.set(-1.28, 1.32, -0.85);
+  lampLight.position.set(-1.12, 1.18, -0.82);
   scene.add(lampLight);
   const screenLight = new THREE.PointLight(0x7FD8E0, 0.85, 5.5, 2);
   screenLight.position.set(-0.1, 1.55, -0.72);
@@ -701,13 +705,16 @@
   const windowLight = new THREE.PointLight(0x8E7FD8, 0.5, 9, 2);
   windowLight.position.set(-3.9, 2.1, -0.9);
   scene.add(windowLight);
+  const flyRim = new THREE.PointLight(0xFFD2A0, 0.9, 1.9, 2);
+  flyRim.position.set(-1.0, 1.35, 0.25);
+  scene.add(flyRim);
   const fairy = new THREE.PointLight(0xFFD9A0, 0.35, 6, 2);
   fairy.position.set(-0.4, 2.7, -3.1);
   scene.add(fairy);
 
   /* ================================ fly ================================= */
   const fly = new THREE.Group();
-  const shell = mat(0x3A3428, 0.45, 0.3);
+  const shell = mat(0x6E6448, 0.38, 0.45);
 
   const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 16), shell);
   abdomen.scale.set(1, 0.82, 1.7);
@@ -722,7 +729,7 @@
   fly.add(head);
 
   const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0xC9483A, roughness: 0.25, emissive: 0x5A1408, emissiveIntensity: 0.6,
+    color: 0xE05A45, roughness: 0.22, emissive: 0x7A1C0A, emissiveIntensity: 0.85,
   });
   [-1, 1].forEach(function (s) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 12), eyeMat);
@@ -730,7 +737,7 @@
     fly.add(eye);
   });
 
-  const wingMat = new THREE.MeshBasicMaterial({ color: 0xE8DCD0, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xF2E8DC, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
   const wings = [-1, 1].map(function (s) {
     const w = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.12), wingMat);
     w.position.set(s * 0.06, 0.07, 0.02);
@@ -748,31 +755,50 @@
     }
   });
 
-  const FLY_HOME = new THREE.Vector3(-0.1, 1.28, -0.4);
+  const FLY_HOME = new THREE.Vector3(-0.72, 1.18, -0.16);
   fly.position.copy(FLY_HOME);
-  fly.scale.setScalar(1.5);
+  fly.scale.setScalar(1.85);
   scene.add(fly);
 
   const labelCanvas = document.createElement("canvas");
   labelCanvas.width = 512; labelCanvas.height = 160;
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true }));
-  label.scale.set(1.05, 0.33, 1);
+  label.scale.set(1.25, 0.39, 1);
   scene.add(label);
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
 
   function drawLabel(action, price, conf) {
     const g = labelCanvas.getContext("2d");
     g.clearRect(0, 0, 512, 160);
-    const tint = action === "BUY" ? "#6FD3C2" : action === "SELL" ? "#FF6B5A" : "#8E8296";
-    g.globalAlpha = 0.4 + 0.6 * conf;
-    g.font = "700 72px 'JetBrains Mono', monospace";
+    const tint = action === "BUY" ? "#6FD3C2" : action === "SELL" ? "#FF6B5A" : "#A99BB0";
+
+    // a plate behind the text, so it reads against a bright chart
+    g.fillStyle = "rgba(23, 19, 32, 0.82)";
+    roundRect(g, 46, 12, 420, 130, 22);
+    g.fill();
+    g.strokeStyle = tint;
+    g.globalAlpha = 0.5 + 0.5 * conf;
+    g.lineWidth = 3;
+    g.stroke();
+
     g.textAlign = "center";
+    g.font = "700 66px 'JetBrains Mono', monospace";
     g.fillStyle = tint;
-    g.fillText(action, 256, 72);
-    g.font = "500 40px 'JetBrains Mono', monospace";
+    g.fillText(action, 256, 78);
+    g.globalAlpha = 1;
+    g.font = "500 34px 'JetBrains Mono', monospace";
     g.fillStyle = "#F5EBE0";
     g.fillText(price.toFixed(3), 256, 124);
-    g.globalAlpha = 1;
     labelTex.needsUpdate = true;
   }
 
@@ -1016,7 +1042,7 @@
     fly.rotation.z = -motion.lean * 0.2;
     fly.rotation.x = motion.pitch * 0.34;
     fly.rotation.y = motion.lean * 0.16;
-    label.position.set(fly.position.x, fly.position.y + 0.4, fly.position.z);
+    label.position.set(fly.position.x, fly.position.y + 0.52, fly.position.z + 0.12);
 
     steam.forEach(function (s, i) {
       s.position.y += dt * 0.1;
