@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lofi Fly Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+  :root {
+    --night: #171320;
+    --panel: rgba(40, 32, 50, 0.78);
+    --edge: rgba(255, 190, 122, 0.18);
+    --edge-soft: rgba(255, 190, 122, 0.09);
+    --cream: #F5EBE0;
+    --cream-dim: #B5A5A8;
+    --cream-faint: #7C6C75;
+    --lamp: #FFBE7A;
+    --mint: #6FD3C2;
+    --coral: #FF6B5A;
+    --flat: #8E8296;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--cream);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+  canvas#room { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  .corner-note {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    left: 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--cream-faint);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--coral);
+    box-shadow: 0 0 8px var(--coral);
+    animation: pulse 3.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+  .stamp {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    right: 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cream-faint);
+    text-align: right;
+    pointer-events: none;
+    z-index: 5;
+    line-height: 1.5;
+  }
+  .stamp b { color: var(--cream); font-weight: 500; display: block; font-size: 13px; }
+
+  .provisional {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 48px);
+    left: 18px;
+    z-index: 5;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--lamp);
+    border: 1px solid rgba(255, 190, 122, 0.3);
+    background: rgba(255, 190, 122, 0.08);
+    border-radius: 10px;
+    padding: 7px 11px;
+    max-width: 268px;
+    line-height: 1.6;
+  }
+
+  .panel {
+    position: fixed;
+    width: 292px;
+    background: var(--panel);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--edge-soft);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100% - 230px);
+    overflow: hidden;
+  }
+  #news { left: 18px; top: 120px; }
+  #ledger { right: 18px; top: 74px; }
+
+  .panel h2 {
+    margin: 0;
+    padding: 13px 16px 11px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--lamp);
+    border-bottom: 1px solid var(--edge-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .panel h2 span { color: var(--cream-faint); letter-spacing: 0.08em; }
+  .panel-body { overflow-y: auto; }
+  .panel-body::-webkit-scrollbar { width: 5px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 3px; }
+
+  .note {
+    padding: 11px 16px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--cream-faint);
+    border-bottom: 1px solid var(--edge-soft);
+  }
+
+  .headline { padding: 11px 16px; border-bottom: 1px solid rgba(255, 190, 122, 0.06); }
+  .headline time {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--cream-faint);
+    display: block;
+    margin-bottom: 5px;
+  }
+  .headline p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--cream); }
+  .jev { display: flex; gap: 11px; font-family: var(--mono); font-size: 10px; color: var(--cream-dim); }
+  .jev i { font-style: normal; color: var(--mint); }
+  .jev .warn { color: var(--coral); }
+
+  .totals { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--edge-soft); }
+  .tot { padding: 12px 16px; }
+  .tot + .tot { border-left: 1px solid var(--edge-soft); }
+  .tot span {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--cream-faint);
+    margin-bottom: 4px;
+  }
+  .tot b { font-family: var(--mono); font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--mint); }
+  .neg { color: var(--coral); }
+
+  .trade {
+    display: grid;
+    grid-template-columns: 52px 42px 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 7px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid rgba(255, 190, 122, 0.05);
+  }
+  .trade .t { color: var(--cream-faint); }
+  .trade .a { font-weight: 700; letter-spacing: 0.03em; }
+  .trade .px { color: var(--cream-dim); }
+  .trade .p { text-align: right; }
+  .a.BUY { color: var(--mint); }
+  .a.SELL { color: var(--coral); }
+  .a.FLAT { color: var(--flat); }
+
+  #brainwrap {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+    width: min(560px, calc(100% - 36px));
+    background: var(--panel);
+    border: 1px solid var(--edge-soft);
+    border-radius: 14px;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    z-index: 4;
+    padding: 11px 14px 12px;
+  }
+  .brain-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--cream-faint);
+    margin-bottom: 8px;
+  }
+  .brain-head b { color: var(--mint); font-weight: 500; }
+  .brain-head em { font-style: normal; color: var(--coral); }
+  canvas#brain { display: block; width: 100%; height: 42px; }
+
+  #transport {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    width: min(560px, calc(100% - 36px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid var(--edge-soft);
+    border-radius: 14px;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    padding: 11px 14px;
+    z-index: 4;
+  }
+  button {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--cream);
+    background: rgba(255, 190, 122, 0.06);
+    border: 1px solid var(--edge);
+    border-radius: 9px;
+    padding: 7px 11px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
+  }
+  button:hover { border-color: var(--lamp); color: var(--lamp); background: rgba(255, 190, 122, 0.12); }
+  button:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+  input[type="range"] { flex: 1; accent-color: var(--lamp); min-width: 60px; }
+  #clock {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cream-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cream-faint);
+    background: var(--night);
+    z-index: 20;
+  }
+
+  @media (max-width: 900px) {
+    .panel { width: auto; left: 14px; right: 14px; max-height: 156px; }
+    #news { top: 102px; }
+    #ledger { top: 266px; }
+    #brainwrap { display: none; }
+    .provisional { max-width: calc(100% - 36px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+</style>
+
+</head>
+<body>
+<canvas id="room"></canvas>
+
+<div class="corner-note"><span class="dot"></span>2:14 AM · still up</div>
+<div class="stamp"><b id="stamp-time">—</b><span id="stamp-pair">USD/JPY · 15M</span></div>
+<div class="provisional">Provisional · no trained readout. Decisions come from raw descending-neuron activity.</div>
+
+<section class="panel" id="news">
+  <h2>News feed <span id="news-src">sample</span></h2>
+  <div class="panel-body" id="news-body"></div>
+</section>
+
+<section class="panel" id="ledger">
+  <h2>Ledger <span id="ledger-count">0 decisions</span></h2>
+  <div class="totals">
+    <div class="tot"><span>Net pips</span><b id="net">0.0</b></div>
+    <div class="tot"><span>Position</span><b id="open-pos">Flat</b></div>
+  </div>
+  <div class="panel-body" id="trades"></div>
+</section>
+
+<div id="brainwrap">
+  <div class="brain-head">
+    <span>Descending neurons <b id="dn-count">—</b></span>
+    <span>Giant fiber <em id="gf">0</em></span>
+  </div>
+  <canvas id="brain"></canvas>
+</div>
+
+<div id="transport">
+  <button id="play">Pause</button>
+  <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Timeline">
+  <button id="speed">1×</button>
+  <button id="cam">Cam</button>
+  <span id="clock">—</span>
+</div>
+
+<div id="loading">Waking the fly…</div>
+
+<script>
+(function () {
+  "use strict";
+
+  let data = null, frames = [], meta = {};
+  let idx = 0, playing = true, speed = 1, elapsed = 0, equity = 0;
+
+  const SAMPLE_NEWS = [
+    { off: 4,   text: "Bank of Japan unexpectedly raises rates, yen surges most since 2024", yen: 4.00, shock: 0.93, kind: "central bank" },
+    { off: 46,  text: "US CPI comes in hotter than expected; Treasury yields spike", yen: 0.56, shock: 0.90, kind: "data" },
+    { off: 98,  text: "Quiet session in Asia as traders await Friday's payrolls", yen: 2.00, shock: 0.11, kind: "data" },
+    { off: 165, text: "Japanese finance minister declines to comment on currency levels", yen: 1.92, shock: 0.18, kind: "central bank" },
+    { off: 232, text: "Emergency BOJ meeting called after yen slides past 165 to the dollar", yen: 0.30, shock: 0.83, kind: "central bank" },
+  ];
+
+  /* =============================== scene =============================== */
+  const canvas = document.getElementById("room");
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setClearColor(0x171320, 1);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x171320, 0.038);
+
+  const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 100);
+  const TARGET = new THREE.Vector3(0, 1.28, -0.5);
+  const HOME = { theta: 0.72, phi: 0.36, radius: 5.4 };
+  let orbit = Object.assign({}, HOME);
+
+  function placeCamera() {
+    const r = orbit.radius, p = orbit.phi, t = orbit.theta;
+    camera.position.set(
+      TARGET.x + r * Math.cos(p) * Math.sin(t),
+      TARGET.y + r * Math.sin(p),
+      TARGET.z + r * Math.cos(p) * Math.cos(t)
+    );
+    camera.lookAt(TARGET);
+  }
+
+  const mat = (c, rough, metal) =>
+    new THREE.MeshStandardMaterial({ color: c, roughness: rough === undefined ? 0.85 : rough, metalness: metal || 0 });
+
+  /* ---- floor: warm boards ---- */
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), mat(0x4A3422, 0.82));
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+  for (let i = -7; i <= 7; i++) {
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(16, 0.012), mat(0x35241a, 1));
+    seam.rotation.x = -Math.PI / 2;
+    seam.position.set(0, 0.003, i * 0.62);
+    scene.add(seam);
+  }
+
+  /* ---- rug ---- */
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.4), mat(0x6B4358, 0.98));
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(0.1, 0.006, 0.55);
+  scene.add(rug);
+  const rugInner = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.95), mat(0x7C5066, 0.98));
+  rugInner.rotation.x = -Math.PI / 2;
+  rugInner.position.set(0.1, 0.008, 0.55);
+  scene.add(rugInner);
+
+  /* ---- walls ---- */
+  const wallMat = mat(0x2C2333, 1);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(16, 7), wallMat);
+  back.position.set(0, 3.5, -3.4);
+  scene.add(back);
+  const left = new THREE.Mesh(new THREE.PlaneGeometry(16, 7), wallMat);
+  left.rotation.y = Math.PI / 2;
+  left.position.set(-4.4, 3.5, 0);
+  scene.add(left);
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(16, 0.16, 0.06), mat(0x3A2F42, 0.9));
+  skirt.position.set(0, 0.08, -3.37);
+  scene.add(skirt);
+
+  /* ---- window with rainy city ---- */
+  const cityCanvas = document.createElement("canvas");
+  cityCanvas.width = 512; cityCanvas.height = 384;
+  const cityTex = new THREE.CanvasTexture(cityCanvas);
+  const cityCtx = cityCanvas.getContext("2d");
+  const buildings = [];
+  for (let x = 0; x < 512; ) {
+    const w = 26 + Math.random() * 46;
+    buildings.push({ x: x, w: w, h: 70 + Math.random() * 190, lit: [] });
+    const b = buildings[buildings.length - 1];
+    for (let wy = 0; wy < b.h - 14; wy += 16) {
+      for (let wx = 5; wx < w - 9; wx += 13) {
+        if (Math.random() < 0.42) b.lit.push({ x: wx, y: wy, warm: Math.random() < 0.72 });
+      }
+    }
+    x += w + 3 + Math.random() * 8;
+  }
+  const drops = Array.from({ length: 90 }, function () {
+    return { x: Math.random() * 512, y: Math.random() * 384, v: 90 + Math.random() * 190, l: 8 + Math.random() * 16 };
+  });
+
+  function drawCity(dt) {
+    const g = cityCtx;
+    const sky = g.createLinearGradient(0, 0, 0, 384);
+    sky.addColorStop(0, "#241C39");
+    sky.addColorStop(0.55, "#3A2846");
+    sky.addColorStop(1, "#57324A");
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 512, 384);
+
+    g.fillStyle = "rgba(255, 233, 196, 0.85)";
+    g.beginPath();
+    g.arc(392, 74, 17, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(87, 50, 74, 0.55)";
+    g.beginPath();
+    g.arc(384, 68, 16, 0, Math.PI * 2);
+    g.fill();
+
+    buildings.forEach(function (b) {
+      g.fillStyle = "#1B1428";
+      g.fillRect(b.x, 384 - b.h, b.w, b.h);
+      b.lit.forEach(function (w) {
+        g.fillStyle = w.warm ? "rgba(255,190,122,0.82)" : "rgba(111,211,194,0.62)";
+        g.fillRect(b.x + w.x, 384 - b.h + 10 + w.y, 5, 7);
+      });
+    });
+
+    g.strokeStyle = "rgba(200, 225, 240, 0.30)";
+    g.lineWidth = 1.4;
+    drops.forEach(function (d) {
+      d.y += d.v * dt;
+      if (d.y > 384) { d.y = -20; d.x = Math.random() * 512; }
+      g.beginPath();
+      g.moveTo(d.x, d.y);
+      g.lineTo(d.x - 2, d.y + d.l);
+      g.stroke();
+    });
+    cityTex.needsUpdate = true;
+  }
+
+  const view = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.9), new THREE.MeshBasicMaterial({ map: cityTex }));
+  view.rotation.y = Math.PI / 2;
+  view.position.set(-4.36, 2.05, -0.9);
+  scene.add(view);
+
+  const frameMat = mat(0x3E3247, 0.75);
+  [[0, 0.99], [0, -0.99]].forEach(function (p) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 2.62), frameMat);
+    bar.position.set(-4.33, 2.05 + p[1], -0.9);
+    scene.add(bar);
+  });
+  [[1.29], [-1.29], [0]].forEach(function (p) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.0, 0.07), frameMat);
+    bar.position.set(-4.33, 2.05, -0.9 + p[0]);
+    scene.add(bar);
+  });
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 2.75), mat(0x4A3B52, 0.8));
+  sill.position.set(-4.24, 1.03, -0.9);
+  scene.add(sill);
+
+  /* ---- bed ---- */
+  const bed = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.34, 2.5), mat(0x5B4433, 0.85));
+  base.position.y = 0.17;
+  bed.add(base);
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.22, 2.42), mat(0xEDE0D0, 0.95));
+  mattress.position.y = 0.44;
+  bed.add(mattress);
+  const duvet = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.19, 1.62), mat(0x9C6B7E, 0.97));
+  duvet.position.set(0, 0.57, 0.38);
+  bed.add(duvet);
+  const fold = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.1, 0.3), mat(0xB8869A, 0.97));
+  fold.position.set(0, 0.63, -0.45);
+  bed.add(fold);
+  const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.17, 0.44), mat(0xF3E8DC, 0.95));
+  pillow.position.set(0, 0.62, -0.93);
+  bed.add(pillow);
+  const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.76, 0.86, 0.09), mat(0x4E3A2C, 0.85));
+  headboard.position.set(0, 0.62, -1.28);
+  bed.add(headboard);
+  bed.position.set(-2.85, 0, -1.6);
+  bed.rotation.y = 0.16;
+  scene.add(bed);
+
+  /* ---- desk ---- */
+  const oak = mat(0x6B4E36, 0.7, 0.05);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.08, 1.35), oak);
+  top.position.set(0.15, 0.79, -0.6);
+  scene.add(top);
+  [[-1.32, -0.12], [1.58, -0.12], [-1.32, -1.06], [1.58, -1.06]].forEach(function (p) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.79, 0.07), mat(0x4A3628, 0.85));
+    leg.position.set(p[0], 0.395, p[1]);
+    scene.add(leg);
+  });
+  // drawer unit
+  const drawers = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 1.1), mat(0x5C4432, 0.8));
+  drawers.position.set(1.2, 0.35, -0.62);
+  scene.add(drawers);
+  [0.16, 0.42].forEach(function (y) {
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.22), mat(0xC9A97E, 0.4, 0.6));
+    handle.position.set(0.9, y, -0.62);
+    scene.add(handle);
+  });
+
+  /* ---- monitor ---- */
+  const screenW = 2.0, screenH = 1.18;
+  const chartCanvas = document.createElement("canvas");
+  chartCanvas.width = 1000; chartCanvas.height = 590;
+  const chartTex = new THREE.CanvasTexture(chartCanvas);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(screenW, screenH), new THREE.MeshBasicMaterial({ map: chartTex }));
+  screen.position.set(-0.1, 1.55, -1.02);
+  scene.add(screen);
+  const bezel = new THREE.Mesh(new THREE.BoxGeometry(screenW + 0.08, screenH + 0.08, 0.06), mat(0x241E2C, 0.6));
+  bezel.position.set(-0.1, 1.55, -1.06);
+  scene.add(bezel);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), mat(0x241E2C, 0.6));
+  neck.position.set(-0.1, 0.92, -1.04);
+  scene.add(neck);
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.22), mat(0x241E2C, 0.6));
+  foot.position.set(-0.1, 0.845, -1.0);
+  scene.add(foot);
+
+  /* ---- keyboard, mug, books, headphones, plant ---- */
+  const kb = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.03, 0.24), mat(0x312A3A, 0.7));
+  kb.position.set(-0.1, 0.845, -0.35);
+  scene.add(kb);
+
+  const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.16, 18), mat(0xD98C6A, 0.6));
+  mug.position.set(-0.95, 0.91, -0.42);
+  scene.add(mug);
+  const mugHandle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 8, 18), mat(0xD98C6A, 0.6));
+  mugHandle.position.set(-1.04, 0.92, -0.42);
+  mugHandle.rotation.y = Math.PI / 2;
+  scene.add(mugHandle);
+
+  const steam = [];
+  for (let i = 0; i < 3; i++) {
+    const s = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xE8DCD0, transparent: true, opacity: 0.1 })
+    );
+    s.position.set(-0.95, 1.02 + i * 0.09, -0.42);
+    steam.push(s);
+    scene.add(s);
+  }
+
+  [[0x8C6B9E, 0.05], [0x6B8C9E, 0.043], [0xC08A6B, 0.038]].forEach(function (b, i) {
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.34, b[1], 0.24), mat(b[0], 0.9));
+    book.position.set(1.02, 0.86 + i * 0.045, -0.36);
+    book.rotation.y = 0.12 * i;
+    scene.add(book);
+  });
+
+  const hpBand = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.018, 8, 22, Math.PI), mat(0x2E2738, 0.7));
+  hpBand.position.set(0.62, 0.95, -0.95);
+  hpBand.rotation.set(0, 0.4, 0);
+  scene.add(hpBand);
+  [-1, 1].forEach(function (s) {
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 14), mat(0x2E2738, 0.7));
+    cup.position.set(0.62 + s * 0.11 * Math.cos(0.4), 0.87, -0.95 - s * 0.11 * Math.sin(0.4));
+    cup.rotation.z = Math.PI / 2;
+    cup.rotation.y = 0.4;
+    scene.add(cup);
+  });
+
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.24, 14), mat(0xB4705A, 0.85));
+  pot.position.set(-3.55, 0.12, 0.4);
+  scene.add(pot);
+  for (let i = 0; i < 9; i++) {
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mat(0x4E7A55, 0.95));
+    leaf.scale.set(1, 0.42, 0.62);
+    const a = (i / 9) * Math.PI * 2;
+    leaf.position.set(-3.55 + Math.cos(a) * 0.17, 0.3 + (i % 3) * 0.13, 0.4 + Math.sin(a) * 0.17);
+    leaf.rotation.set(0.4, a, 0.5);
+    scene.add(leaf);
+  }
+
+  /* ---- desk lamp ---- */
+  const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.03, 16), mat(0x3A3145, 0.6, 0.3));
+  lampBase.position.set(-1.35, 0.845, -0.9);
+  scene.add(lampBase);
+  const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.52, 10), mat(0x3A3145, 0.6, 0.3));
+  lampArm.position.set(-1.35, 1.1, -0.9);
+  lampArm.rotation.z = -0.22;
+  scene.add(lampArm);
+  const shade = new THREE.Mesh(
+    new THREE.ConeGeometry(0.17, 0.2, 18, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: 0xE8A76A, roughness: 0.5, side: THREE.DoubleSide,
+      emissive: 0xFFBE7A, emissiveIntensity: 0.45,
+    })
+  );
+  shade.position.set(-1.28, 1.36, -0.88);
+  shade.rotation.z = Math.PI + 0.22;
+  scene.add(shade);
+
+  /* ---- string lights along the back wall ---- */
+  const bulbs = [];
+  for (let i = 0; i < 12; i++) {
+    const b = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xFFD9A0 })
+    );
+    const x = -3.2 + i * 0.58;
+    b.position.set(x, 2.75 - Math.sin((i / 11) * Math.PI) * 0.22, -3.3);
+    bulbs.push(b);
+    scene.add(b);
+  }
+
+  /* ---- poster ---- */
+  const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.2), mat(0x8C5A72, 0.95));
+  poster.position.set(1.75, 2.2, -3.36);
+  scene.add(poster);
+  const posterInk = new THREE.Mesh(new THREE.CircleGeometry(0.26, 24), mat(0xE8C48A, 0.9));
+  posterInk.position.set(1.75, 2.36, -3.35);
+  scene.add(posterInk);
+
+  /* ---- lighting ---- */
+  scene.add(new THREE.AmbientLight(0x4A3C58, 0.7));
+  const lampLight = new THREE.PointLight(0xFFBE7A, 1.5, 7, 2);
+  lampLight.position.set(-1.28, 1.32, -0.85);
+  scene.add(lampLight);
+  const screenLight = new THREE.PointLight(0x7FD8E0, 0.85, 5.5, 2);
+  screenLight.position.set(-0.1, 1.55, -0.72);
+  scene.add(screenLight);
+  const windowLight = new THREE.PointLight(0x8E7FD8, 0.5, 9, 2);
+  windowLight.position.set(-3.9, 2.1, -0.9);
+  scene.add(windowLight);
+  const fairy = new THREE.PointLight(0xFFD9A0, 0.35, 6, 2);
+  fairy.position.set(-0.4, 2.7, -3.1);
+  scene.add(fairy);
+
+  /* ================================ fly ================================= */
+  const fly = new THREE.Group();
+  const shell = mat(0x3A3428, 0.45, 0.3);
+
+  const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 16), shell);
+  abdomen.scale.set(1, 0.82, 1.7);
+  abdomen.position.z = 0.1;
+  fly.add(abdomen);
+  const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 16), shell);
+  thorax.scale.set(1, 0.95, 1.15);
+  thorax.position.z = -0.06;
+  fly.add(thorax);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.062, 18, 14), shell);
+  head.position.z = -0.16;
+  fly.add(head);
+
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: 0xC9483A, roughness: 0.25, emissive: 0x5A1408, emissiveIntensity: 0.6,
+  });
+  [-1, 1].forEach(function (s) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 12), eyeMat);
+    eye.position.set(s * 0.045, 0.012, -0.18);
+    fly.add(eye);
+  });
+
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xE8DCD0, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
+  const wings = [-1, 1].map(function (s) {
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.12), wingMat);
+    w.position.set(s * 0.06, 0.07, 0.02);
+    w.rotation.set(Math.PI / 2, 0, s * 0.3);
+    fly.add(w);
+    return w;
+  });
+
+  [-1, 1].forEach(function (s) {
+    for (let i = 0; i < 3; i++) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.004, 0.12, 6), mat(0x241F19, 0.9));
+      leg.position.set(s * 0.07, -0.06, -0.1 + i * 0.08);
+      leg.rotation.z = s * 0.7;
+      fly.add(leg);
+    }
+  });
+
+  const FLY_HOME = new THREE.Vector3(-0.1, 1.28, -0.4);
+  fly.position.copy(FLY_HOME);
+  fly.scale.setScalar(1.5);
+  scene.add(fly);
+
+  const labelCanvas = document.createElement("canvas");
+  labelCanvas.width = 512; labelCanvas.height = 160;
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true }));
+  label.scale.set(1.05, 0.33, 1);
+  scene.add(label);
+
+  function drawLabel(action, price, conf) {
+    const g = labelCanvas.getContext("2d");
+    g.clearRect(0, 0, 512, 160);
+    const tint = action === "BUY" ? "#6FD3C2" : action === "SELL" ? "#FF6B5A" : "#8E8296";
+    g.globalAlpha = 0.4 + 0.6 * conf;
+    g.font = "700 72px 'JetBrains Mono', monospace";
+    g.textAlign = "center";
+    g.fillStyle = tint;
+    g.fillText(action, 256, 72);
+    g.font = "500 40px 'JetBrains Mono', monospace";
+    g.fillStyle = "#F5EBE0";
+    g.fillText(price.toFixed(3), 256, 124);
+    g.globalAlpha = 1;
+    labelTex.needsUpdate = true;
+  }
+
+  /* ============================ monitor chart ============================ */
+  function drawChart(upto) {
+    const g = chartCanvas.getContext("2d");
+    const W = chartCanvas.width, H = chartCanvas.height;
+    g.fillStyle = "#1C1726";
+    g.fillRect(0, 0, W, H);
+    if (!frames.length) return;
+
+    const lo = Math.max(0, upto - 96);
+    const slice = frames.slice(lo, upto + 1);
+    if (slice.length < 2) return;
+
+    const px = slice.map(function (f) { return f.c; });
+    let min = Math.min.apply(null, px), max = Math.max.apply(null, px);
+    const pad = (max - min) * 0.18 || 0.05;
+    min -= pad; max += pad;
+    const X = function (i) { return 64 + (i / (slice.length - 1)) * (W - 128); };
+    const Y = function (v) { return H - 72 - ((v - min) / (max - min)) * (H - 146); };
+
+    g.strokeStyle = "rgba(255,190,122,0.10)";
+    g.fillStyle = "#7C6C75";
+    g.font = "20px 'JetBrains Mono', monospace";
+    g.textAlign = "left";
+    g.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const v = min + (i / 4) * (max - min), y = Y(v);
+      g.beginPath(); g.moveTo(64, y); g.lineTo(W - 64, y); g.stroke();
+      g.fillText(v.toFixed(2), W - 60, y + 7);
+    }
+
+    const area = g.createLinearGradient(0, 60, 0, H - 72);
+    area.addColorStop(0, "rgba(111,211,194,0.22)");
+    area.addColorStop(1, "rgba(111,211,194,0)");
+    g.beginPath();
+    g.moveTo(X(0), H - 72);
+    slice.forEach(function (f, i) { g.lineTo(X(i), Y(f.c)); });
+    g.lineTo(X(slice.length - 1), H - 72);
+    g.closePath();
+    g.fillStyle = area;
+    g.fill();
+
+    g.strokeStyle = "#6FD3C2";
+    g.lineWidth = 2.6;
+    g.beginPath();
+    slice.forEach(function (f, i) { i ? g.lineTo(X(i), Y(f.c)) : g.moveTo(X(i), Y(f.c)); });
+    g.stroke();
+
+    slice.forEach(function (f, i) {
+      if (f.action === "FLAT") return;
+      g.fillStyle = f.action === "BUY" ? "rgba(111,211,194,0.9)" : "rgba(255,107,90,0.9)";
+      g.beginPath();
+      g.arc(X(i), Y(f.c), 4.5, 0, Math.PI * 2);
+      g.fill();
+    });
+
+    const last = slice[slice.length - 1];
+    g.fillStyle = "#FFBE7A";
+    g.beginPath();
+    g.arc(X(slice.length - 1), Y(last.c), 7, 0, Math.PI * 2);
+    g.fill();
+
+    g.fillStyle = "#F5EBE0";
+    g.font = "500 26px 'JetBrains Mono', monospace";
+    g.textAlign = "left";
+    g.fillText("USD/JPY  ·  15M", 64, 46);
+    g.fillStyle = "#6FD3C2";
+    g.textAlign = "right";
+    g.fillText(last.c.toFixed(3), W - 64, 46);
+    chartTex.needsUpdate = true;
+  }
+
+  /* ============================= brain strip ============================= */
+  const brainCanvas = document.getElementById("brain");
+  const bctx = brainCanvas.getContext("2d");
+  function drawBrain(frame) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = brainCanvas.clientWidth, h = 42;
+    if (brainCanvas.width !== Math.round(w * dpr)) {
+      brainCanvas.width = Math.round(w * dpr);
+      brainCanvas.height = Math.round(h * dpr);
+    }
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bctx.clearRect(0, 0, w, h);
+    if (!frame) return;
+    const n = frame.brain.length;
+    const cols = Math.ceil(n / 4);
+    const cw = w / cols;
+    const gfSet = {};
+    (data.gf_index || []).forEach(function (i) { gfSet[i] = true; });
+    for (let i = 0; i < n; i++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const v = frame.brain[i];
+      if (gfSet[i]) bctx.fillStyle = v > 0 ? "#FF6B5A" : "rgba(255,107,90,0.3)";
+      else bctx.fillStyle = v > 0 ? "rgba(111,211,194," + Math.min(1, 0.35 + v * 0.22) + ")" : "rgba(245,235,224,0.08)";
+      bctx.fillRect(col * cw, row * 10 + 2, Math.max(1.4, cw - 0.8), 7);
+    }
+  }
+
+  /* =============================== panels =============================== */
+  function fmtTime(iso) { return new Date(iso).toISOString().slice(11, 16) + "Z"; }
+  function fmtDate(iso) { return new Date(iso).toISOString().slice(0, 10) + " " + fmtTime(iso); }
+
+  function buildNews() {
+    const body = document.getElementById("news-body");
+    body.innerHTML = "";
+    const note = document.createElement("div");
+    note.className = "note";
+    note.textContent = "Point-in-time headline feed not connected yet. Below: real Jev readings on sample wire copy, shown to demonstrate the channel. Not an input to these decisions.";
+    body.appendChild(note);
+    SAMPLE_NEWS.forEach(function (n) {
+      const f = frames[Math.min(n.off, frames.length - 1)];
+      const el = document.createElement("article");
+      el.className = "headline";
+      el.innerHTML =
+        "<time>" + (f ? fmtDate(f.t) : "—") + " · sample</time><p>" + n.text + "</p>" +
+        '<div class="jev"><span>yen <i>' + n.yen.toFixed(2) + "</i>/4</span>" +
+        '<span>shock <i class="' + (n.shock > 0.6 ? "warn" : "") + '">' + n.shock.toFixed(2) + "</i></span>" +
+        "<span>" + n.kind + "</span></div>";
+      body.appendChild(el);
+    });
+  }
+
+  const tradesEl = document.getElementById("trades");
+  function resetLedger() {
+    tradesEl.innerHTML = "";
+    equity = 0;
+    const net = document.getElementById("net");
+    net.textContent = "0.0";
+    net.className = "";
+  }
+  function pushTrade(f, i) {
+    const row = document.createElement("div");
+    row.className = "trade";
+    row.innerHTML =
+      '<span class="t">' + fmtTime(f.t) + '</span><span class="a ' + f.action + '">' + f.action + "</span>" +
+      '<span class="px">' + f.c.toFixed(3) + '</span><span class="p ' + (f.pnl >= 0 ? "pos" : "neg") + '">' +
+      (f.pnl >= 0 ? "+" : "") + f.pnl.toFixed(1) + "</span>";
+    tradesEl.insertBefore(row, tradesEl.firstChild);
+    while (tradesEl.children.length > 80) tradesEl.removeChild(tradesEl.lastChild);
+
+    equity += f.pnl;
+    const net = document.getElementById("net");
+    net.textContent = (equity >= 0 ? "+" : "") + equity.toFixed(1);
+    net.className = equity >= 0 ? "pos" : "neg";
+    document.getElementById("ledger-count").textContent = (i + 1) + " decisions";
+    const open = document.getElementById("open-pos");
+    open.textContent = f.action === "FLAT" ? "Flat" : f.action === "BUY" ? "Long" : "Short";
+    open.className = f.action === "BUY" ? "pos" : f.action === "SELL" ? "neg" : "";
+  }
+
+  /* ============================== playback ============================== */
+  // Motion state. The fly is a damped spring chasing a target, never snapped
+  // to one: decisions arrive once a second and would otherwise read as a twitch.
+  const motion = {
+    lean: 0, leanTarget: 0,   // lateral, from momentum
+    off: 0, vel: 0,           // backward escape offset and its velocity
+    pitch: 0, pitchVel: 0,    // nose-up during an escape
+    lastEscape: -99,          // refractory, so it cannot flinch every decision
+  };
+  const ESCAPE_COOLDOWN = 2.6; // seconds
+
+  function applyFrame(i, withLedger) {
+    const f = frames[i];
+    if (!f) return;
+    document.getElementById("stamp-time").textContent = fmtDate(f.t);
+    document.getElementById("gf").textContent = f.gf;
+    document.getElementById("dn-count").textContent =
+      f.brain.filter(function (v) { return v > 0; }).length + " / " + f.brain.length + " firing";
+    document.getElementById("clock").textContent = (i + 1) + " / " + frames.length;
+    drawLabel(f.action, f.c, f.conf);
+    drawChart(i);
+    drawBrain(f);
+    // ease the target itself, so a flipped decision bends the path instead of
+    // yanking it
+    const want = Math.max(-1, Math.min(1, f.score * 1.7));
+    motion.leanTarget = motion.leanTarget * 0.45 + want * 0.55;
+
+    // only a genuinely strong escape response launches the fly, and never twice
+    // in quick succession
+    const now = clock.elapsedTime;
+    if (f.action === "SELL" && f.gf >= 3 && now - motion.lastEscape > ESCAPE_COOLDOWN) {
+      motion.lastEscape = now;
+      motion.vel += 2.4;        // shove backwards
+      motion.pitchVel += 3.2;   // nose up
+    }
+    if (withLedger) pushTrade(f, i);
+    document.getElementById("scrub").value = String(i);
+  }
+
+  function seek(i) {
+    idx = Math.max(0, Math.min(frames.length - 1, i));
+    resetLedger();
+    for (let k = 0; k <= idx; k++) pushTrade(frames[k], k);
+    applyFrame(idx, false);
+  }
+
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    const t = clock.elapsedTime;
+
+    if (playing && frames.length) {
+      elapsed += dt * speed;
+      if (elapsed >= 1) {
+        elapsed = 0;
+        idx = (idx + 1) % frames.length;
+        if (idx === 0) resetLedger();
+        applyFrame(idx, true);
+      }
+    }
+
+    drawCity(dt);
+
+    const beat = Math.sin(t * 46) * 0.6;
+    wings[0].rotation.z = 0.3 + beat;
+    wings[1].rotation.z = -0.3 - beat;
+
+    // lateral drift: slow first-order chase, no snapping
+    motion.lean += (motion.leanTarget - motion.lean) * Math.min(1, dt * 1.5);
+
+    // escape: critically damped spring back to the desk
+    const K = 26, C = 7.4;
+    motion.vel += (-K * motion.off - C * motion.vel) * dt;
+    motion.off += motion.vel * dt;
+    motion.pitchVel += (-K * motion.pitch - C * motion.pitchVel) * dt;
+    motion.pitch += motion.pitchVel * dt;
+
+    // idle hover: two slow sines out of phase, so it drifts rather than bobs
+    const hoverY = Math.sin(t * 1.15) * 0.022 + Math.sin(t * 0.47) * 0.012;
+    const hoverX = Math.sin(t * 0.63) * 0.02;
+
+    fly.position.x = FLY_HOME.x + motion.lean * 0.34 + hoverX;
+    fly.position.y = FLY_HOME.y + hoverY + Math.max(0, motion.off) * 0.24;
+    fly.position.z = FLY_HOME.z + Math.max(0, motion.off) * 0.42;
+    fly.rotation.z = -motion.lean * 0.2;
+    fly.rotation.x = motion.pitch * 0.34;
+    fly.rotation.y = motion.lean * 0.16;
+    label.position.set(fly.position.x, fly.position.y + 0.4, fly.position.z);
+
+    steam.forEach(function (s, i) {
+      s.position.y += dt * 0.1;
+      s.material.opacity = Math.max(0, 0.12 - (s.position.y - 1.02 - i * 0.09) * 0.4);
+      if (s.position.y > 1.5) s.position.y = 1.02 + i * 0.09;
+    });
+
+    bulbs.forEach(function (b, i) {
+      b.material.color.setHSL(0.09, 0.8, 0.62 + Math.sin(t * 1.3 + i) * 0.06);
+    });
+    lampLight.intensity = 1.45 + Math.sin(t * 1.7) * 0.04;
+    screenLight.intensity = 0.8 + Math.sin(t * 8) * 0.04;
+
+    placeCamera();
+    renderer.render(scene, camera);
+  }
+
+  /* ============================ interaction ============================ */
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    if (frames[idx]) drawBrain(frames[idx]);
+  }
+  window.addEventListener("resize", resize);
+
+  let dragging = false, lastX = 0, lastY = 0;
+  canvas.addEventListener("pointerdown", function (e) {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    orbit.theta -= (e.clientX - lastX) * 0.005;
+    orbit.phi = Math.max(0.04, Math.min(1.0, orbit.phi + (e.clientY - lastY) * 0.004));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  ["pointerup", "pointercancel"].forEach(function (ev) {
+    canvas.addEventListener(ev, function () { dragging = false; });
+  });
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    orbit.radius = Math.max(2.6, Math.min(9.5, orbit.radius + e.deltaY * 0.004));
+  }, { passive: false });
+
+  document.getElementById("play").addEventListener("click", function (e) {
+    playing = !playing;
+    e.target.textContent = playing ? "Pause" : "Play";
+  });
+  document.getElementById("speed").addEventListener("click", function (e) {
+    speed = speed === 1 ? 2 : speed === 2 ? 4 : speed === 4 ? 0.5 : 1;
+    e.target.textContent = speed + "×";
+  });
+  document.getElementById("cam").addEventListener("click", function () {
+    orbit = Object.assign({}, HOME);
+  });
+  document.getElementById("scrub").addEventListener("input", function (e) {
+    seek(parseInt(e.target.value, 10));
+  });
+
+  /* ================================ boot ================================ */
+  fetch("../data/replay.json")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      data = d;
+      meta = d.meta || {};
+      frames = d.frames || [];
+      const el = document.getElementById("loading");
+      if (el) el.remove();
+      document.getElementById("scrub").max = String(Math.max(0, frames.length - 1));
+      document.getElementById("stamp-pair").textContent =
+        (meta.instrument || "USD/JPY") + " · " + (meta.step_minutes || 15) + "M · " +
+        (meta.neurons || 0).toLocaleString() + " neurons";
+      buildNews();
+      resetLedger();
+      resize();
+      applyFrame(0, true);
+      animate();
+    })
+    .catch(function (err) {
+      const el = document.getElementById("loading");
+      if (el) el.textContent = "Replay unavailable: " + err.message;
+    });
+})();
+</script>
+
+</body>
+</html>

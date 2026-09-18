@@ -72,36 +72,48 @@ class FlyBrain:
         self.refrac = torch.zeros(self.n, batch, device=self.device, dtype=torch.int32)
         self.delay_buf = [z() for _ in range(self.delay_steps)]
         self.buf_pos = 0
+        # scratch buffers, so the hot loop allocates nothing
+        self._tmp = z()
+        self._mask = torch.zeros(self.n, batch, device=self.device, dtype=torch.bool)
+        self._spikes = torch.zeros(self.n, batch, device=self.device, dtype=torch.bool)
+        self._sf = z()
 
-    def step(self, drive: torch.Tensor | None = None) -> torch.Tensor:
-        """Advance one dt.
+    def step(self, drive_dt: torch.Tensor | None = None) -> torch.Tensor:
+        """Advance one dt, in place.
 
-        `drive` is an external input rate in mV/ms, so results stay comparable
-        across integration step sizes. Synaptic input arrives as discrete jumps.
+        `drive_dt` is the external input already multiplied by dt (see `run`),
+        so results stay comparable across integration step sizes. Synaptic input
+        arrives as discrete jumps.
+
+        Every update here is in place: at 165,836 neurons times a batch, the
+        allocations dominated the sparse matrix multiply.
         """
         p = self.p
         delayed = self.delay_buf[self.buf_pos]
 
-        self.g = self.g + (-self.g / p.tau) * p.dt + delayed
-        if drive is not None:
-            self.g = self.g + drive * p.dt
+        # g decays, then takes the delayed synaptic input and the external drive
+        self.g.mul_(1.0 - p.dt / p.tau).add_(delayed)
+        if drive_dt is not None:
+            self.g.add_(drive_dt)
 
-        active = self.refrac <= 0
-        dv = (p.v_0 - self.v + self.g) / p.t_mbr * p.dt
-        self.v = torch.where(active, self.v + dv, self.v)
+        # dv = (v_0 - v + g) * dt / t_mbr, applied only outside the refractory period
+        torch.sub(self.g, self.v, out=self._tmp)
+        self._tmp.add_(p.v_0).mul_(p.dt / p.t_mbr)
+        self._tmp.mul_(torch.le(self.refrac, 0, out=self._mask))
+        self.v.add_(self._tmp)
 
-        spikes = (self.v > p.v_th) & active
-        self.v = torch.where(spikes, torch.full_like(self.v, p.v_rst), self.v)
-        self.g = torch.where(spikes, torch.zeros_like(self.g), self.g)
-        self.refrac = torch.where(
-            spikes, torch.full_like(self.refrac, self.rfc_steps), self.refrac - 1
-        )
+        torch.gt(self.v, p.v_th, out=self._spikes)
+        self._spikes.logical_and_(self._mask)
+
+        self.v.masked_fill_(self._spikes, p.v_rst)
+        self.g.masked_fill_(self._spikes, 0.0)
+        self.refrac.sub_(1).masked_fill_(self._spikes, self.rfc_steps)
 
         # synaptic current arriving after t_dly
-        s = spikes.to(self.dtype)
-        self.delay_buf[self.buf_pos] = torch.mm(self.W, s)
+        self._sf.copy_(self._spikes)
+        self.delay_buf[self.buf_pos] = torch.mm(self.W, self._sf)
         self.buf_pos = (self.buf_pos + 1) % self.delay_steps
-        return spikes
+        return self._spikes
 
     def run(
         self,
@@ -127,6 +139,7 @@ class FlyBrain:
             drive = torch.zeros(self.n, batch, device=self.device, dtype=self.dtype)
             d = drive_mV.to(self.device, self.dtype)
             drive[drive_idx] = d if d.dim() == 2 else d.unsqueeze(1).expand(-1, batch)
+            drive.mul_(self.p.dt)
 
         n_rec = self.n if record is None else len(record)
         counts = torch.zeros(n_rec, batch, device=self.device, dtype=self.dtype)
@@ -134,3 +147,34 @@ class FlyBrain:
             spikes = self.step(drive)
             counts += (spikes if record is None else spikes[record]).to(self.dtype)
         return counts
+
+    def run_binned(
+        self,
+        ms: float,
+        drive_idx: torch.Tensor,
+        drive_mV: torch.Tensor,
+        record: torch.Tensor,
+        bins: int = 4,
+    ) -> torch.Tensor:
+        """Run and return spike counts per time bin: (bins, n_recorded, batch).
+
+        Timing carries information a single total throws away, and recording it
+        costs nothing at extraction time but a re-run to add later.
+        """
+        batch = drive_mV.shape[1] if drive_mV.dim() == 2 else 1
+        self.reset(batch)
+
+        drive = torch.zeros(self.n, batch, device=self.device, dtype=self.dtype)
+        d = drive_mV.to(self.device, self.dtype)
+        drive[drive_idx] = d if d.dim() == 2 else d.unsqueeze(1).expand(-1, batch)
+        drive.mul_(self.p.dt)
+
+        steps = int(round(ms / self.p.dt))
+        per_bin = max(1, steps // bins)
+        out = torch.zeros(bins, len(record), batch, device=self.device, dtype=self.dtype)
+
+        for s in range(steps):
+            spikes = self.step(drive)
+            b = min(bins - 1, s // per_bin)
+            out[b] += spikes[record].to(self.dtype)
+        return out
