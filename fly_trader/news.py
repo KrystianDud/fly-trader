@@ -120,26 +120,55 @@ def fetch_slice(when: datetime, timeout: int = 60) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def slices_between(start: datetime, end: datetime) -> list[datetime]:
+    when = start.replace(minute=start.minute // 15 * 15, second=0, microsecond=0)
+    out = []
+    while when <= end:
+        out.append(when)
+        when += timedelta(minutes=15)
+    return out
+
+
 def ingest(
     start: datetime,
     end: datetime,
     filt: Filter = JPY,
-    min_words: int = 4,
+    workers: int = 12,
+    progress: bool = False,
 ) -> pd.DataFrame:
-    """Every 15-minute slice in a range, filtered and de-duplicated."""
-    out, when = [], start.replace(minute=start.minute // 15 * 15, second=0, microsecond=0)
-    while when <= end:
-        df = fetch_slice(when)
-        if len(df):
-            df = df[df.headline.map(is_readable)]
-            keep = df.apply(filt.matches, axis=1) if len(df) else []
-            out.append(df[keep])
-        when += timedelta(minutes=15)
+    """Every 15-minute slice in a range, filtered and de-duplicated.
 
+    Fetched in parallel: sequentially, a year of slices takes about ten hours,
+    almost all of it waiting on the network.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    stamps = slices_between(start, end)
+    out, missing = [], 0
+
+    def one(when: datetime) -> pd.DataFrame:
+        df = fetch_slice(when)
+        if not len(df):
+            return df
+        df = df[df.headline.map(is_readable)]
+        return df[df.apply(filt.matches, axis=1)] if len(df) else df
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for i, df in enumerate(pool.map(one, stamps)):
+            if len(df):
+                out.append(df)
+            else:
+                missing += 1
+            if progress and i % 200 == 0:
+                print(f"  {i}/{len(stamps)} slices, {missing} empty", flush=True)
+
+    if missing:
+        print(f"note: {missing} of {len(stamps)} slices returned nothing "
+              f"(GDELT gaps or all-filtered)")
     if not out:
         return pd.DataFrame()
-    all_rows = pd.concat(out, ignore_index=True)
-    return all_rows.drop_duplicates(subset="url").sort_values("t").reset_index(drop=True)
+    rows = pd.concat(out, ignore_index=True)
+    return rows.drop_duplicates(subset="url").sort_values("t").reset_index(drop=True)
 
 
 # ---------------------------------------------------------------- scoring
