@@ -105,7 +105,26 @@
     overflow: hidden;
   }
   #news { left: 18px; top: 120px; }
-  #ledger { right: 18px; top: 74px; }
+  #ledger { right: 18px; top: 74px; max-height: calc(100% - 480px); }
+  #eye {
+    right: 18px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    padding-bottom: 4px;
+  }
+  #eye-canvas {
+    display: block;
+    width: calc(100% - 24px);
+    height: 190px;
+    margin: 10px 12px 2px;
+  }
+  .eye-note {
+    margin: 0;
+    padding: 0 14px 11px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    line-height: 1.5;
+    color: var(--cream-faint);
+  }
 
   .panel h2 {
     margin: 0;
@@ -268,6 +287,7 @@
 
   @media (max-width: 900px) {
     .panel { width: auto; left: 14px; right: 14px; max-height: 156px; }
+    #eye { display: none; }
     #news { top: 102px; }
     #ledger { top: 266px; }
     #brainwrap { display: none; }
@@ -296,6 +316,12 @@
     <div class="tot"><span>Position</span><b id="open-pos">Flat</b></div>
   </div>
   <div class="panel-body" id="trades"></div>
+</section>
+
+<section class="panel" id="eye">
+  <h2>Fly eye · L1/L2 <span id="eye-spikes">0 spikes</span></h2>
+  <canvas id="eye-canvas"></canvas>
+  <p class="eye-note">36×39 ommatidial columns · 64 bars of price, played as a moving image</p>
 </section>
 
 <div id="brainwrap">
@@ -534,65 +560,39 @@
   foot.position.set(-0.1, 0.845, -1.0);
   scene.add(foot);
 
-  /* ---- the fly's-eye screen: what the retina is actually shown ---- */
-  const eyeCanvas = document.createElement("canvas");
-  eyeCanvas.width = 360; eyeCanvas.height = 400;
-  const eyeTex = new THREE.CanvasTexture(eyeCanvas);
-  const eyeScreen = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.62, 0.68),
-    new THREE.MeshBasicMaterial({ map: eyeTex })
-  );
-  eyeScreen.position.set(1.18, 1.22, -0.92);
-  eyeScreen.rotation.y = -0.42;
-  scene.add(eyeScreen);
-  const eyeBezel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.7, 0.76, 0.06),
-    mat(0x2A2334, 0.65)
-  );
-  eyeBezel.position.set(1.2, 1.22, -0.95);
-  eyeBezel.rotation.y = -0.42;
-  scene.add(eyeBezel);
-  const eyeStand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.06), mat(0x2A2334, 0.65));
-  eyeStand.position.set(1.2, 0.99, -0.93);
-  scene.add(eyeStand);
-  const eyeGlow = new THREE.PointLight(0x9BE8A8, 0.4, 2.4, 2);
-  eyeGlow.position.set(1.1, 1.22, -0.7);
-  scene.add(eyeGlow);
+  const eyeCanvas = document.getElementById("eye-canvas");
+  const ectx = eyeCanvas.getContext("2d");
 
   function drawEye(frame) {
-    const g = eyeCanvas.getContext("2d");
-    g.fillStyle = "#0E1610";
-    g.fillRect(0, 0, 360, 400);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = eyeCanvas.clientWidth, h = eyeCanvas.clientHeight;
+    if (eyeCanvas.width !== Math.round(w * dpr)) {
+      eyeCanvas.width = Math.round(w * dpr);
+      eyeCanvas.height = Math.round(h * dpr);
+    }
+    ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ectx.clearRect(0, 0, w, h);
     if (!frame || !frame.eye) return;
 
-    const rows = frame.eye, h = rows.length, w = rows[0].length;
-    const cell = Math.min(340 / w, 330 / h);
-    const ox = (360 - cell * w) / 2, oy = 44;
+    const rows = frame.eye, rh = rows.length, rw = rows[0].length;
+    const cell = Math.min(w / (rw + 0.5), h / rh);
+    const ox = (w - cell * rw) / 2, oy = (h - cell * rh) / 2;
 
-    g.fillStyle = "#9BE8A8";
-    g.font = "600 15px 'JetBrains Mono', monospace";
-    g.textAlign = "left";
-    g.fillText("FLY EYE · L1/L2", 14, 24);
-    g.textAlign = "right";
-    g.fillStyle = "#6FD3C2";
-    g.fillText(frame.eye_spikes + " sp", 346, 24);
-
-    // one dot per ommatidial column, lit where the chart falls on it
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
+    // one dot per ommatidial column, offset row by row like the real lattice
+    for (let y = 0; y < rh; y++) {
+      for (let x = 0; x < rw; x++) {
         const on = rows[y][x] === "1";
-        g.fillStyle = on ? "#9BE8A8" : "rgba(155,232,168,0.07)";
-        g.beginPath();
-        g.arc(ox + cell * (x + 0.5) + (y % 2 ? cell * 0.25 : 0),
-              oy + cell * (h - y - 0.5), cell * (on ? 0.42 : 0.2), 0, Math.PI * 2);
-        g.fill();
+        ectx.fillStyle = on ? "#9BE8A8" : "rgba(155,232,168,0.10)";
+        ectx.beginPath();
+        ectx.arc(
+          ox + cell * (x + 0.5) + (y % 2 ? cell * 0.25 : 0),
+          oy + cell * (rh - y - 0.5),
+          cell * (on ? 0.4 : 0.17), 0, Math.PI * 2
+        );
+        ectx.fill();
       }
     }
-    g.fillStyle = "rgba(155,232,168,0.5)";
-    g.font = "11px 'JetBrains Mono', monospace";
-    g.textAlign = "center";
-    g.fillText(w + "x" + h + " columns · 64 bars of price", 180, 390);
-    eyeTex.needsUpdate = true;
+    document.getElementById("eye-spikes").textContent = (frame.eye_spikes ?? 0) + " spikes";
   }
 
   /* ---- keyboard, mug, books, headphones, plant ---- */
@@ -1041,7 +1041,7 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    if (frames[idx]) drawBrain(frames[idx]);
+    if (frames[idx]) { drawBrain(frames[idx]); drawEye(frames[idx]); }
   }
   window.addEventListener("resize", resize);
 
