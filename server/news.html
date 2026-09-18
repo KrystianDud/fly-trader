@@ -104,7 +104,7 @@
   </section>
   <section>
     <h2>2 · Triaged <em>local classifier</em></h2>
-    <div class="feed" id="feed-tri"><p class="empty">Ranked by predicted market impact.</p></div>
+    <div class="feed" id="feed-tri"><p class="empty">Top 6 per slice by predicted market impact.</p></div>
   </section>
   <section>
     <h2>3 · Scored <em>Jev</em></h2>
@@ -142,13 +142,18 @@
     feeds.in.prepend(el);
     trim(feeds.in);
     clearEmpty(feeds.in);
+  }
 
-    if (hot) {
-      const t = el.cloneNode(true);
-      feeds.tri.prepend(t);
-      trim(feeds.tri);
-      clearEmpty(feeds.tri);
-    }
+  function addForwarded(d) {
+    const el = document.createElement("article");
+    el.innerHTML =
+      '<div class="meta"><span>' + fmt(d.t) + "</span><span>" + d.source + "</span>" +
+      (d.triage != null ? '<span class="score hot">' + d.triage.toFixed(3) + "</span>" : "") +
+      "</div><p class=\"headline\">" + d.headline + "</p>" +
+      '<div class="bar"><span style="width:' + Math.round((d.triage ?? 0) * 100) + '%"></span></div>';
+    feeds.tri.prepend(el);
+    trim(feeds.tri);
+    clearEmpty(feeds.tri);
   }
 
   function addScored(d) {
@@ -187,13 +192,15 @@
     ws.onmessage = function (ev) {
       const d = JSON.parse(ev.data);
       if (d.type === "article") addArticle(d);
+      else if (d.type === "forwarded") addForwarded(d);
       else if (d.type === "scored") addScored(d);
       else if (d.type === "counts") {
         document.getElementById("c-in").textContent = d.ingested;
         document.getElementById("c-tri").textContent = d.triaged;
         document.getElementById("c-sc").textContent = d.scored;
       } else if (d.type === "slice") {
-        status.textContent = d.stage === "fetching" ? "fetching " + fmt(d.t) : d.stage;
+        status.textContent = d.stage === "fetching" ? "fetching " + fmt(d.t)
+          : d.stage === "idle" ? "live · last slice " + fmt(d.t) : d.stage;
       } else if (d.type === "error") {
         status.textContent = "error: " + d.message;
       }

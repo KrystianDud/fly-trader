@@ -46,10 +46,15 @@ class Filter:
     domains: tuple[str, ...] = ()
 
     def matches(self, row: pd.Series) -> bool:
-        hay = f"{row['headline']} {row['themes']} {row['orgs']}".lower()
+        """Relevance must be visible in the headline itself.
+
+        Matching on GDELT themes instead lets in film reviews and airline
+        awards, because an article tagged ECON_INFLATION somewhere in its body
+        is not an article about inflation.
+        """
         if self.domains and row["source"] not in self.domains:
             return False
-        return any(k in hay for k in self.any_of)
+        return any(k in row["headline"].lower() for k in self.any_of)
 
 
 JPY = Filter(
@@ -168,7 +173,11 @@ def ingest(
     if not out:
         return pd.DataFrame()
     rows = pd.concat(out, ignore_index=True)
-    return rows.drop_duplicates(subset="url").sort_values("t").reset_index(drop=True)
+    # syndicated copies share a headline across many URLs, so de-duplicate on
+    # the text as well as the link
+    rows["_key"] = rows["headline"].str.lower().str.replace(r"\s+", " ", regex=True)
+    rows = rows.drop_duplicates(subset="url").drop_duplicates(subset=["_key"])
+    return rows.drop(columns="_key").sort_values("t").reset_index(drop=True)
 
 
 # ---------------------------------------------------------------- scoring

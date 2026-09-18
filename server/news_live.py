@@ -85,6 +85,9 @@ async def run_slice(when: datetime) -> None:
 
     df = df[df.headline.map(news.is_readable)]
     df = df[df.apply(news.JPY.matches, axis=1)] if len(df) else df
+    if len(df):  # syndicated copies share a headline across many URLs
+        df = df.assign(_k=df.headline.str.lower().str.replace(r"\s+", " ", regex=True))
+        df = df.drop_duplicates(subset="_k").drop(columns="_k")
     if not len(df):
         await broadcast({"type": "slice", "t": when.isoformat(), "stage": "nothing relevant"})
         return
@@ -113,6 +116,16 @@ async def run_slice(when: datetime) -> None:
 
     chosen = df.head(KEEP_PER_SLICE)
     state["counts"]["triaged"] += len(chosen)
+    for _, r in chosen.iterrows():
+        await broadcast(
+            {
+                "type": "forwarded",
+                "t": when.isoformat(),
+                "source": r["source"],
+                "headline": r["headline"],
+                "triage": None if pd.isna(r["triage"]) else round(float(r["triage"]), 3),
+            }
+        )
     scored = await asyncio.to_thread(news.score, chosen, 8)
 
     for _, r in scored.iterrows():
@@ -133,6 +146,7 @@ async def run_slice(when: datetime) -> None:
             }
         )
     await broadcast({"type": "counts", **state["counts"]})
+    await broadcast({"type": "slice", "t": when.isoformat(), "stage": "idle"})
 
 
 @app.on_event("startup")
