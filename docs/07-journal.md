@@ -105,21 +105,34 @@ final bin**, meaning activity is still climbing when the simulation is cut off.
 20 ms is probably too short. Added a 50 ms ablation rather than changing the
 pre-registered protocol mid-flight.
 
-### GPU: 18x, and an unplanned finding
+### GPU: 18x, and a finding that evaporated
 
 An L4 (the g5 with its A10G had no capacity anywhere in London) runs 71.6
-windows/sec against the Mac's 3.94. The real arm over the full 3.7-year
-history took 18.8 minutes.
+windows/sec against the Mac's 3.94. The real arm over the full 3.7-year history
+took 18.8 minutes.
 
-Then the first rewired arm took **over three times longer than the real one on
-identical hardware**. The likely explanation is memory locality: biological
-wiring is clustered, so the sparse matrix has structure the GPU can coalesce,
-while rewiring scatters connections across the whole index space and turns
-every multiply into a random fetch.
+Then the first rewired arm appeared to take over three times longer on
+identical hardware, and a tidy explanation suggested itself: biological wiring
+is clustered, so the sparse matrix has locality the GPU can coalesce, while
+rewiring scatters connections and turns every multiply into a random fetch.
+Evolved connectivity would be not only functionally organised but cheaper to
+compute. A lovely side-finding.
 
-If it holds up under a clean benchmark, it is a side-finding worth reporting on
-its own: evolved connectivity is not only functionally organised, it is
-*cheaper to compute*. Nobody set out to measure that.
+It was wrong twice over.
+
+Measuring the matrix multiply directly: rewiring costs **1.06x**, not 3x. And
+the random graph, whose locality is thirteen times worse by any column-distance
+measure, runs **faster** than the real connectome. Locality is not what drives
+cost here.
+
+Worse, the slowdown being explained was not real either. The instance logs in
+UTC and the laptop runs on BST, so a one-hour clock offset was read as a
+four-fold slowdown. The arm was running exactly on pace the whole time.
+
+Two lessons, both cheap here and expensive elsewhere. A plausible mechanism is
+not evidence — the locality story was convincing enough to write down before
+anyone measured it. And before explaining a surprising number, check that the
+number is real.
 
 ### The news model disagrees with the lexicon, correctly
 
