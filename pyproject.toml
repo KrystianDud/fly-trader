@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dukascopy-python>=4.0.1",
+    "fastapi>=0.141.1",
     "joblib>=1.6.0",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
@@ -17,6 +18,7 @@ dependencies = [
     "scipy>=1.18.1",
     "torch>=2.14.0",
     "typesafe-sdk>=0.6.0",
+    "uvicorn[standard]>=0.53.0",
     "vectorbt>=1.1.0",
     "yfinance>=1.7.0",
 ]
