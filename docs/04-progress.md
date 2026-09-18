@@ -11,6 +11,9 @@ Last updated: 2026-09-17
 | Brain loading and simulation | ✅ working, benchmarked |
 | Market data | ✅ USD/JPY 1m, 1.38M bars |
 | News sense (Jev) | ✅ connected and sanity-checked |
+| News ingestion | ✅ GDELT (archival) + 28 RSS feeds (live) |
+| Triage classifier | ✅ perfect precision at 5% keep |
+| Live pipeline monitor | ✅ websocket, three stages |
 | Sensory encoding | ✅ working, validated |
 | Readout and training | ⬜ not started |
 | Baseline arms | ⬜ not started |

@@ -163,6 +163,49 @@ trend lines are directional motion, which is T4 and T5. No pattern is defined
 anywhere in the code. The fly gets pixels, and the rewired arms say whether
 evolved shape-processing extracts more from them than a scramble does.
 
+### The news pipeline, and what the live view exposed
+
+Building the news channel properly meant three components, and the live monitor
+found bugs in all of them within minutes of existing, which is the argument for
+building the monitor.
+
+**Volume forces a cascade.** The full history is about 5.35M relevant articles.
+Jev scores 53 a second, so scoring everything is 28 hours — for $13. Cost is
+irrelevant; throughput is the constraint. Asking Jev less per call does not
+help either, because its questions run in parallel inside one call, so a
+one-question triage pass costs the same wall-clock as a three-question scoring
+pass. Only a local model changes the exponent.
+
+So a classifier trained on Jev's own labels reads everything and forwards a few
+percent. At a 5% keep rate it runs at perfect precision and at the ceiling of
+achievable recall: every item it forwards is one Jev would have flagged. Full
+history scoring drops from 28 hours to under three.
+
+**What the monitor caught.** Within minutes of the three-column view existing:
+the relevance filter was matching GDELT *themes* rather than headlines, so film
+reviews and airline awards counted as market news — one slice went from 45
+articles to 9 once relevance had to be visible in the headline. Syndicated
+copies were arriving three and four times, sharing a headline across different
+URLs. And the forwarded column was permanently empty because the page decided
+what counted as forwarded using a threshold while the server forwarded the top
+six by rank.
+
+**A guess where a fact was available.** The loop assumed GDELT lags five
+minutes and waited on that assumption, so a slice already published sat
+untouched and the page looked dead for a quarter of an hour at a time. GDELT
+publishes `lastupdate.txt` naming its current files. Ask, do not guess.
+
+**Two channels, two jobs.** GDELT is the only source with archives, so it
+remains the historical backfill, but its cadence is fifteen minutes and its
+headlines are reconstructed from URL slugs. RSS is seconds-fresh with real
+titles and has no past whatsoever. 28 feeds live, the widest net being Google
+News queries that aggregate thousands of publishers continuously.
+
+One deliberate choice worth recording: the RSS reader marks everything already
+in the feeds as seen at startup without emitting it. Otherwise launching the
+monitor dumps hundreds of hours-old stories in as though they had just broken,
+which would look impressive and be a lie.
+
 ---
 
 *Results from the six-arm sweep go here when it finishes.*
