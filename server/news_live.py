@@ -22,16 +22,23 @@ import pandas as pd
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
-from fly_trader import news, triage
+from fly_trader import news, rss, triage
 
 POLL_SECONDS = 45
-KEEP_PER_SLICE = 6          # how many survive triage per 15-minute slice
+KEEP_PER_SLICE = 6          # how many survive triage per 15-minute GDELT slice
+RSS_SECONDS = 20            # RSS publishes continuously, so poll it hard
+RSS_MAX_PER_POLL = 8        # cap the LLM calls when a wire dumps a batch
 HISTORY = 400               # rows held in memory for late joiners
 
 app = FastAPI()
 clients: set[WebSocket] = set()
 history: list[dict] = []
-state = {"last_slice": None, "model": None, "counts": {"ingested": 0, "triaged": 0, "scored": 0}}
+state = {
+    "last_slice": None,
+    "model": None,
+    "feeds": 0,
+    "counts": {"ingested": 0, "triaged": 0, "scored": 0},
+}
 
 
 def load_model():
@@ -119,6 +126,7 @@ async def run_slice(when: datetime) -> bool:
         await broadcast(
             {
                 "type": "article",
+                "channel": "gdelt",
                 "t": when.isoformat(),
                 "source": r["source"],
                 "headline": r["headline"],
@@ -134,6 +142,7 @@ async def run_slice(when: datetime) -> bool:
         await broadcast(
             {
                 "type": "forwarded",
+                "channel": "gdelt",
                 "t": when.isoformat(),
                 "source": r["source"],
                 "headline": r["headline"],
@@ -149,6 +158,7 @@ async def run_slice(when: datetime) -> bool:
         await broadcast(
             {
                 "type": "scored",
+                "channel": "gdelt",
                 "t": when.isoformat(),
                 "headline": r["headline"],
                 "tone": round(float(r["gdelt_tone"]), 2),
@@ -163,9 +173,90 @@ async def run_slice(when: datetime) -> bool:
     return True
 
 
+async def rss_loop() -> None:
+    """Continuous headlines between GDELT's quarter-hourly snapshots."""
+    reader = rss.Reader()
+    health = await asyncio.to_thread(reader.check)
+    state["feeds"] = int(health.alive.sum())
+    await asyncio.to_thread(reader.prime)  # do not replay the existing backlog
+    await broadcast(
+        {"type": "feeds", "alive": state["feeds"], "total": int(len(health))}
+    )
+
+    while True:
+        try:
+            df = await asyncio.to_thread(reader.poll)
+            if len(df):
+                await handle_live(df)
+        except Exception as e:
+            await broadcast({"type": "error", "message": "rss: " + str(e)[:180]})
+        await asyncio.sleep(RSS_SECONDS)
+
+
+async def handle_live(df) -> None:
+    """Same pipeline as a GDELT slice: score, forward the best, ask Jev."""
+    model = state["model"]
+    df = df.copy()
+    df["triage"] = (
+        await asyncio.to_thread(model.predict, df) if model is not None else float("nan")
+    )
+    df = df.sort_values("triage", ascending=False)
+
+    state["counts"]["ingested"] += len(df)
+    for _, r in df.iterrows():
+        await broadcast(
+            {
+                "type": "article",
+                "channel": "rss",
+                "t": r["t"].isoformat(),
+                "source": r["source"],
+                "headline": r["headline"],
+                "tone": 0.0,
+                "triage": None if pd.isna(r["triage"]) else round(float(r["triage"]), 3),
+                "url": r["url"],
+            }
+        )
+
+    chosen = df.head(RSS_MAX_PER_POLL)
+    state["counts"]["triaged"] += len(chosen)
+    for _, r in chosen.iterrows():
+        await broadcast(
+            {
+                "type": "forwarded",
+                "channel": "rss",
+                "t": r["t"].isoformat(),
+                "source": r["source"],
+                "headline": r["headline"],
+                "triage": None if pd.isna(r["triage"]) else round(float(r["triage"]), 3),
+            }
+        )
+
+    scored = await asyncio.to_thread(news.score, chosen, 8)
+    for _, r in scored.iterrows():
+        if pd.isna(r.get("jev_yen")):
+            continue
+        state["counts"]["scored"] += 1
+        await broadcast(
+            {
+                "type": "scored",
+                "channel": "rss",
+                "t": r["t"].isoformat(),
+                "headline": r["headline"],
+                "tone": 0.0,
+                "triage": None if pd.isna(r.get("triage")) else round(float(r["triage"]), 3),
+                "yen": round(float(r["jev_yen"]), 2),
+                "conf": round(float(r["jev_yen_conf"]), 2),
+                "shock": round(float(r["jev_shock"]), 2),
+                "kind": r["jev_kind"],
+            }
+        )
+    await broadcast({"type": "counts", **state["counts"]})
+
+
 @app.on_event("startup")
 async def startup() -> None:
     asyncio.create_task(pipeline_loop())
+    asyncio.create_task(rss_loop())
 
 
 @app.websocket("/ws")
@@ -193,6 +284,7 @@ async def health() -> dict:
     return {
         "last_slice": state["last_slice"].isoformat() if state["last_slice"] else None,
         "classifier": state["model"] is not None,
+        "live_feeds": state["feeds"],
         "clients": len(clients),
         **state["counts"],
     }

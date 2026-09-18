@@ -93,6 +93,12 @@
     text-transform: uppercase; color: var(--lamp);
   }
   .slice-head span:last-child { color: var(--faint); }
+  .chan {
+    font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .chan.rss { color: var(--mint); background: rgba(111,211,194,0.12); }
+  .chan.gdelt { color: var(--lamp); background: rgba(255,190,122,0.12); }
   #status b { color: var(--cream); font-weight: 500; }
   @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
 </style>
@@ -105,6 +111,7 @@
     <span>ingested <b id="c-in">0</b></span>
     <span>forwarded <b id="c-tri">0</b></span>
     <span>scored <b id="c-sc">0</b></span>
+    <span>feeds <b id="c-feeds">–</b></span>
   </span>
 </header>
 
@@ -132,6 +139,10 @@
     sc: document.getElementById("feed-sc"),
   };
   const MAX = 120;
+
+  function chan(c) {
+    return c ? '<span class="chan ' + c + '">' + c + "</span>" : "";
+  }
 
   function clearEmpty(el) {
     const e = el.querySelector(".empty");
@@ -165,7 +176,7 @@
     const hot = d.triage != null && d.triage >= 0.5;
     const el = document.createElement("article");
     el.innerHTML =
-      '<div class="meta"><span>' + fmt(d.t) + "</span><span>" + d.source + "</span>" +
+      '<div class="meta"><span>' + fmt(d.t) + "</span>" + chan(d.channel) + "<span>" + d.source + "</span>" +
       (d.triage != null ? '<span class="score' + (hot ? " hot" : "") + '">' + d.triage.toFixed(3) + "</span>" : "") +
       "</div><p class=\"headline\">" + d.headline + "</p>" +
       '<div class="bar"><span style="width:' + Math.round((d.triage ?? 0) * 100) + '%"></span></div>';
@@ -177,7 +188,7 @@
   function addForwarded(d) {
     const el = document.createElement("article");
     el.innerHTML =
-      '<div class="meta"><span>' + fmt(d.t) + "</span><span>" + d.source + "</span>" +
+      '<div class="meta"><span>' + fmt(d.t) + "</span>" + chan(d.channel) + "<span>" + d.source + "</span>" +
       (d.triage != null ? '<span class="score hot">' + d.triage.toFixed(3) + "</span>" : "") +
       "</div><p class=\"headline\">" + d.headline + "</p>" +
       '<div class="bar"><span style="width:' + Math.round((d.triage ?? 0) * 100) + '%"></span></div>';
@@ -249,6 +260,8 @@
           divider(feeds.sc, d.t, "scored");
         }
         status.textContent = d.stage === "fetching" ? "fetching " + fmt(d.t) : d.stage;
+      } else if (d.type === "feeds") {
+        document.getElementById("c-feeds").textContent = d.alive + "/" + d.total;
       } else if (d.type === "waiting") {
         clock.last = new Date(d.next_after);
         clock.seen = Date.now();
