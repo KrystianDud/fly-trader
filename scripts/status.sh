@@ -39,7 +39,7 @@ ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i "$KEY" ubuntu@"$IP" '
   fi
   echo
   echo "── last progress ──"
-  tail -n 6 ~/fruit_fly/data/activations/logs/*.log 2>/dev/null | tail -14
+  tail -n 5 ~/fruit_fly/logs/*.log ~/fruit_fly/data/activations/logs/*.log 2>/dev/null | tail -16
   echo
   echo "── results so far ──"
   ls -t ~/fruit_fly/reports/*.json 2>/dev/null | head -3 | while read f; do
