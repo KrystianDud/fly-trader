@@ -206,6 +206,59 @@ in the feeds as seen at startup without emitting it. Otherwise launching the
 monitor dumps hundreds of hours-old stories in as though they had just broken,
 which would look impressive and be a lie.
 
+### The first real answer, and it is no
+
+Four arms of six, full 3.7-year history, 92,030 decisions each, purged
+walk-forward, costs included.
+
+| Readout input | IC | Hit rate | Net bp | Sharpe |
+|---|---|---|---|---|
+| raw features only | **+0.0095** | 0.508 | -0.310 | -11.86 |
+| real connectome | -0.0022 | 0.495 | -0.361 | -13.28 |
+| rewire 0.1 | +0.0040 | 0.497 | -0.372 | -13.68 |
+| rewire 0.25 | +0.0040 | 0.498 | -0.357 | -12.70 |
+| rewire 0.5 | -0.0012 | 0.499 | -0.358 | -13.02 |
+
+**The real wiring is not better than a scramble of itself.** No ordering by how
+much structure was destroyed; the dose-response curve is flat. That was the
+pre-registered primary question and the answer is no.
+
+**The brain discards signal it was handed.** This is the part worth
+understanding. The six raw market features carry an IC of +0.0095 on their own,
+with signs that make economic sense — strong up-moves are followed by
+down-moves, which is mean reversion. Pass those same features through 165,836
+neurons and the information is gone. Not transformed, not concentrated
+somewhere else in the population: gone. And scrambled wiring loses it equally,
+which is why the arms are indistinguishable.
+
+**Nothing pays for its own spread.** Even the best arm loses 0.31 bp per
+decision, because an IC of 0.01 cannot cover 0.6 bp of cost paid on 40% of
+92,030 decisions. Buy-and-hold returns Sharpe +0.48 and beats every model here.
+
+#### The diagnostic that makes this a result rather than a bug report
+
+A zero is only worth reporting if the apparatus can produce a non-zero. Planting
+a noisy copy of the answer into the feature matrix gives IC +0.245, hit rate
+63%, Sharpe +31. Labels, purged folds, fitting and evaluation all work. The
+zeros are real zeros.
+
+Second check: the target's own autocorrelation at 15-minute horizon is +0.002
+to -0.004. USD/JPY at this frequency is close to a martingale, which is what
+theory says it should be.
+
+#### What the experiment was actually asking
+
+Adding the features-only baseline changed the question. Until then the
+comparison was "can the fly beat nothing", which a flat zero answers
+ambiguously — an unpredictable market and a brain that destroys signal look
+identical. With the baseline in place the question becomes "does the brain add
+anything to the features it was given", and the answer is clearly negative: it
+subtracts.
+
+That baseline cost four lines and should have been there from the first run.
+
 ---
 
-*Results from the six-arm sweep go here when it finishes.*
+*The 50 ms ablation and the retinal arm are still pending. Neither is expected
+to overturn this, but the 20 ms window does cut the network off while its
+activity is still rising, and the retina is a genuinely different pathway.*

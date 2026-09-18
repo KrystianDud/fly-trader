@@ -27,9 +27,17 @@ def load(tag: str):
     return acts, feat, meta
 
 
-def run_arm(tag: str, folds, weights, alpha: float, bins: str, sizes: list[int]):
+def run_arm(tag: str, folds, weights, alpha: float, bins: str, sizes: list[int],
+            extra: np.ndarray | None = None):
     acts, feat, meta = load(tag)
     X = readout.design_matrix(acts, bins=bins)
+    del acts
+
+    # most descending neurons never fire under our sensory drive, and a column
+    # of zeros is 92,030 useless float32s. Dropping them takes the design
+    # matrix from ~1.9 GB to ~0.6 GB and changes no result.
+    alive = X.std(axis=0) > 0
+    X = np.ascontiguousarray(X[:, alive])
     y = feat["ret_fwd"].to_numpy(dtype=np.float64)
 
     res = readout.fit(X, y, folds, alpha=alpha, weights=weights)
@@ -52,6 +60,14 @@ def run_arm(tag: str, folds, weights, alpha: float, bins: str, sizes: list[int])
     metrics["arm"] = meta["arm"]
     metrics["reciprocity"] = meta["graph"]["reciprocity"]
     metrics["windows"] = meta["windows"]
+    metrics["live_features"] = int(alive.sum())
+
+    # does the brain add anything on top of the features it was handed?
+    if extra is not None:
+        Xboth = np.hstack([X, extra.astype(np.float32)])
+        rb = readout.fit(Xboth, y, folds, alpha=alpha, weights=weights)
+        mb = readout.evaluate(rb, y, cost=COST, periods_per_year=PERIODS_PER_YEAR)
+        metrics["with_features"] = {k: v for k, v in mb.items() if k != "net_returns"}
     return metrics
 
 
@@ -86,9 +102,27 @@ def main() -> None:
 
     sizes = [s for s in (500, 1000, 2500, 5000, 10000, 20000) if s <= n]
 
+    # The comparisons that make the brain arms interpretable. Without these,
+    # a zero result is ambiguous: it could mean the market is unpredictable, or
+    # that the brain discarded signal it was handed.
+    FEATURE_COLS = ["fast_up", "fast_down", "slow_up", "slow_down",
+                    "volatility", "looming"]
     rows = []
+
+    Xf = feat0[FEATURE_COLS].to_numpy(dtype=np.float32)
+    yf = feat0["ret_fwd"].to_numpy(dtype=np.float64)
+    ref = readout.fit(Xf, yf, folds, alpha=1.0, weights=weights)
+    m = readout.evaluate(ref, yf, cost=COST, periods_per_year=PERIODS_PER_YEAR)
+    m |= {"arm": "features_only", "reciprocity": float("nan"),
+          "windows": n, "live_features": Xf.shape[1], "learning_curve": []}
+    rows.append(m)
+    print(f"{'features_only':12s} IC {m['ic']:+.4f}  hit {m['hit_rate']:.3f}  "
+          f"net {m['net_mean_bp']:+.3f} bp  Sharpe {m['sharpe']:+.2f}  "
+          f"trades {m['trade_share']:.2f}", flush=True)
+
     for tag in tags:
-        m = run_arm(tag, folds, weights, args.alpha, args.bins, sizes)
+        m = run_arm(tag, folds, weights, args.alpha, args.bins, sizes,
+                    extra=Xf if tag.endswith(f"real_s{args.seed}_{args.sim_ms}ms") else None)
         rows.append(m)
         print(f"{m['arm']:12s} IC {m['ic']:+.4f}  hit {m['hit_rate']:.3f}  "
               f"net {m['net_mean_bp']:+.3f} bp  Sharpe {m['sharpe']:+.2f}  "
@@ -137,6 +171,61 @@ def main() -> None:
     }
     out = REPORTS / f"run_{stamp}.json"
     out.write_text(json.dumps(report, indent=2, default=float))
+
+    lines = [
+        f"# Run {stamp}",
+        "",
+        f"{n:,} decisions, {len(folds)} purged walk-forward folds, "
+        f"costs {COST * 1e4:.1f} bp per position change.",
+        "",
+        "## Dose-response: performance against how much structure was destroyed",
+        "",
+        "| Arm | Reciprocity | IC | Hit rate | Net bp | Sharpe | Trades |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in sorted(rows, key=lambda r: -r["reciprocity"]):
+        lines.append(
+            f"| {r['arm']} | {r['reciprocity']:.4f} | {r['ic']:+.4f} | "
+            f"{r['hit_rate']:.3f} | {r['net_mean_bp']:+.3f} | {r['sharpe']:+.2f} | "
+            f"{r['trade_share']:.2f} |"
+        )
+    lines += ["", "## Learning curves (IC by training size)", "",
+              "| Arm | " + " | ".join(str(s) for s in sizes) + " |",
+              "|---" * (len(sizes) + 1) + "|"]
+    for r in sorted(rows, key=lambda r: -r["reciprocity"]):
+        by = {c["train_size"]: c["ic"] for c in r["learning_curve"]}
+        lines.append(f"| {r['arm']} | " +
+                     " | ".join(f"{by.get(s, float('nan')):+.4f}" for s in sizes) + " |")
+    lines += ["", "## Does the brain add anything to its own inputs?", ""]
+    r_real = next((r for r in rows if r["arm"] == "real"), None)
+    r_feat = next((r for r in rows if r["arm"] == "features_only"), None)
+    if r_real and r_feat:
+        lines += [
+            "| Readout input | IC | Hit rate | Sharpe |",
+            "|---|---|---|---|",
+            f"| raw features only | {r_feat['ic']:+.4f} | {r_feat['hit_rate']:.3f} | "
+            f"{r_feat['sharpe']:+.2f} |",
+            f"| descending neurons only | {r_real['ic']:+.4f} | {r_real['hit_rate']:.3f} | "
+            f"{r_real['sharpe']:+.2f} |",
+        ]
+        wf = r_real.get("with_features")
+        if wf:
+            lines.append(
+                f"| both | {wf['ic']:+.4f} | {wf['hit_rate']:.3f} | {wf['sharpe']:+.2f} |"
+            )
+    lines += ["", "## Verdict", ""]
+    if advantage:
+        lines += [
+            f"- Wiring advantage: **{advantage['mean_diff_bp']:+.4f} bp** per decision, "
+            f"95% CI [{advantage['ci95_bp'][0]:+.4f}, {advantage['ci95_bp'][1]:+.4f}]",
+            f"- Excludes zero: **{advantage['excludes_zero']}**",
+        ]
+    lines += [
+        f"- Best arm `{best['arm']}` deflated Sharpe **{dsr['dsr']:.3f}** "
+        f"(needs > 0.95), luck benchmark {dsr['sr0_annual']:+.2f}",
+        f"- Buy and hold Sharpe {base['buy_and_hold']['sharpe']:+.2f}",
+    ]
+    (REPORTS / f"run_{stamp}.md").write_text("\n".join(lines) + "\n")
 
     print(f"\nbaselines: buy&hold Sharpe {base['buy_and_hold']['sharpe']:+.2f}")
     if advantage:
