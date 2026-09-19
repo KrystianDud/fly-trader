@@ -43,7 +43,7 @@ per-region. Both were requested for eu-west-2 on 2026-09-18:
 Check status:
 
 ```bash
-AWS_PROFILE=fulcrum aws service-quotas get-service-quota \
+AWS_PROFILE=your-profile aws service-quotas get-service-quota \
   --region eu-west-2 --service-code ec2 --quota-code L-DB2E81BA \
   --query 'Quota.Value' --output text
 ```

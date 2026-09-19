@@ -17,3 +17,10 @@ data/
 
 # macOS
 .DS_Store
+
+# separate line of work, not part of the connectome study
+scripts/crypto_*.py
+scripts/fetch_crypto.py
+scripts/fetch_basket.py
+scripts/conditional_edge.py
+scripts/trend_portfolio.py
